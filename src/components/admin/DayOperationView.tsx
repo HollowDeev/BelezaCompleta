@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Appointment } from "@/types/appointment";
 import { TriageSubmission } from "@/types/triage";
 import { ServiceItem } from "@/types/service";
 import { formatBRL } from "@/lib/utils";
 import { LinearTimelineMaster } from "@/components/admin/LinearTimelineMaster";
+import confetti from "canvas-confetti";
+import { playSuccessTone } from "@/lib/sound/chime";
 import {
   Zap,
   Sparkles,
@@ -21,6 +23,8 @@ import {
   Layers,
   ArrowRight,
   TrendingUp,
+  Sun,
+  X,
 } from "lucide-react";
 
 interface DayOperationViewProps {
@@ -57,6 +61,94 @@ export function DayOperationView({
     Math.round((todayRevenue / dailyTargetRevenue) * 100)
   );
 
+  // Gamificação - Efeito de confetes e som disparado uma única vez ao atingir 100%
+  const hasCelebratedRef = useRef(false);
+
+  useEffect(() => {
+    if (targetPercent >= 100) {
+      if (!hasCelebratedRef.current) {
+        hasCelebratedRef.current = true;
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            colors: ["#DBAE3B", "#C59B27", "#FAF7F2", "#8B6914"],
+            origin: { y: 0.7 },
+          });
+        } catch (e) {
+          console.warn("Falha ao disparar confetes:", e);
+        }
+        playSuccessTone();
+      }
+    } else {
+      hasCelebratedRef.current = false;
+    }
+  }, [targetPercent]);
+
+  // Morning Briefing (aparece apenas no primeiro acesso do dia)
+  const [showBriefing, setShowBriefing] = useState(false);
+
+  useEffect(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const lastBriefingDate = localStorage.getItem("lastBriefingDate");
+    if (lastBriefingDate !== today) {
+      setShowBriefing(true);
+    }
+  }, []);
+
+  const handleCloseBriefing = () => {
+    const today = new Date().toISOString().split("T")[0];
+    localStorage.setItem("lastBriefingDate", today);
+    setShowBriefing(false);
+  };
+
+  // Projeção de faturamento futuro: próximos 14 dias (confirmed e date > today)
+  const future14DaysRevenue = appointments
+    .filter((a) => {
+      if (a.status !== "confirmed") return false;
+      const todayStr = new Date().toISOString().split("T")[0];
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() + 14);
+      const limitStr = limitDate.toISOString().split("T")[0];
+      return a.date > todayStr && a.date <= limitStr;
+    })
+    .reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+
+  // Ordenação de atendimentos do dia para o briefing
+  const sortedTodayAppointments = [...todayAppointments].sort((a, b) =>
+    a.startTime.localeCompare(b.startTime)
+  );
+  const nextClient = sortedTodayAppointments[0];
+
+  // Identificação de janela livre para encaixe
+  const freeSlotInfo = (() => {
+    // 1. Pausa química ativa em algum atendimento
+    for (const apt of sortedTodayAppointments) {
+      const pauseBlock = apt.stepBlocks?.find((b) => b.type === "pause");
+      if (pauseBlock) {
+        return {
+          time: pauseBlock.startTime,
+          durationMin: pauseBlock.durationMin,
+        };
+      }
+    }
+    // 2. Intervalo livre entre atendimentos subsequentes
+    for (let i = 0; i < sortedTodayAppointments.length - 1; i++) {
+      const curr = sortedTodayAppointments[i];
+      const next = sortedTodayAppointments[i + 1];
+      const [currH, currM] = curr.endTime.split(":").map(Number);
+      const [nextH, nextM] = next.startTime.split(":").map(Number);
+      const diff = nextH * 60 + nextM - (currH * 60 + currM);
+      if (diff >= 30) {
+        return {
+          time: curr.endTime,
+          durationMin: diff,
+        };
+      }
+    }
+    return null;
+  })();
+
   // Triagens pendentes com alerta urgente
   const pendingTriages = triageSubmissions.filter(
     (s) => s.status === "pending_review"
@@ -73,8 +165,81 @@ export function DayOperationView({
 
   const upcomingAppointments = todayAppointments.slice(1);
 
+  // 3 Fases Visuais da Barra de Meta
+  const remainingToTarget = Math.max(0, dailyTargetRevenue - todayRevenue);
+  let barGradient = "bg-[#8B4513]";
+  let phaseText = `Foco no dia! Faltam ${formatBRL(remainingToTarget)} para cobrir os custos`;
+
+  if (targetPercent >= 100) {
+    barGradient = "bg-gradient-to-r from-emerald-500 to-emerald-600";
+    phaseText = "🎉 Meta Superada! Você é imparável hoje, Gleicy!";
+  } else if (targetPercent >= 50) {
+    barGradient = "gold-gradient";
+    phaseText = `Quase lá! Faltam ${formatBRL(remainingToTarget)} para sua meta diária 🔥`;
+  }
+
   return (
     <div className="space-y-6">
+      {/* MORNING BRIEFING (Primeiro acesso do dia) */}
+      {showBriefing && (
+        <div className="relative bg-gradient-to-r from-[#2D1914] via-[#3E211A] to-[#1A0F0C] rounded-3xl p-5 sm:p-6 text-white border-2 border-[#DBAE3B]/60 shadow-xl overflow-hidden animate-fade-in">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#DBAE3B]/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="relative z-10 flex items-start justify-between gap-4">
+            <div className="space-y-3 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-400/20 text-[#DBAE3B] flex items-center justify-center">
+                  <Sun className="w-5 h-5 text-amber-300" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                  Bom dia, Gleicy! ☀️
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
+                <div className="p-3 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-stone-300 block text-[11px]">Atendimentos Hoje:</span>
+                  <span className="text-base font-bold text-white">
+                    {todayAppointments.length} agendados
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-stone-300 block text-[11px]">Faturamento Previsto:</span>
+                  <span className="text-base font-bold text-[#DBAE3B]">
+                    {formatBRL(todayRevenue)}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-stone-300 block text-[11px]">Próxima Cliente:</span>
+                  <span className="text-xs font-bold text-white truncate block">
+                    {nextClient ? `${nextClient.clientName} às ${nextClient.startTime}` : "Nenhuma agendada"}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-stone-300 block text-[11px]">Oportunidade Encaixe:</span>
+                  <span className="text-xs font-bold text-emerald-300 truncate block">
+                    {freeSlotInfo
+                      ? `Janela livre às ${freeSlotInfo.time} (${freeSlotInfo.durationMin} min)`
+                      : "Agenda contínua hoje"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCloseBriefing}
+              className="p-1.5 sm:p-2 rounded-xl bg-white/10 hover:bg-white/20 text-stone-300 hover:text-white transition-colors shrink-0"
+              title="Fechar briefing"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. BANNER GAMIFICADO DE CONQUISTA DIÁRIA */}
       <div className="bg-gradient-to-r from-[#2D1914] via-[#44271F] to-[#1A0F0C] rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-[#C59B27]/30 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-[#DBAE3B]/10 to-transparent rounded-full blur-2xl pointer-events-none" />
@@ -98,8 +263,8 @@ export function DayOperationView({
             </p>
           </div>
 
-          {/* Barra de Progresso da Meta Diária (Gamificação) */}
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 min-w-[260px] sm:min-w-[300px]">
+          {/* Barra de Progresso da Meta Diária (Gamificação em 3 Fases) */}
+          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 min-w-[280px] sm:min-w-[340px]">
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="font-semibold text-stone-300 flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-[#DBAE3B]" />
@@ -109,15 +274,20 @@ export function DayOperationView({
                 {formatBRL(todayRevenue)} / {formatBRL(dailyTargetRevenue)} ({targetPercent}%)
               </span>
             </div>
-            <div className="w-full h-2.5 rounded-full bg-black/40 overflow-hidden">
+            <div className="w-full h-3 rounded-full bg-black/40 overflow-hidden shadow-inner">
               <div
-                className="h-full gold-gradient transition-all duration-700 ease-out"
+                className={`h-full ${barGradient} transition-all duration-700 ease-out`}
                 style={{ width: `${targetPercent}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-[10px] text-stone-400 mt-2">
+            <div className="text-[11px] font-semibold text-amber-200 mt-2 leading-tight">
+              {phaseText}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-stone-400 mt-1.5 pt-1.5 border-t border-white/10">
               <span>{todayAppointments.length} atendimentos</span>
-              <span>{targetPercent >= 100 ? "🎉 Meta Batida!" : "Rumo ao objetivo!"}</span>
+              <span className="text-emerald-300 font-medium flex items-center gap-1">
+                📈 {formatBRL(future14DaysRevenue)} já garantidos nos próximos 14 dias
+              </span>
             </div>
           </div>
         </div>

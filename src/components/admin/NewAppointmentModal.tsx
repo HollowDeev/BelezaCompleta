@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ServiceItem } from "@/types/service";
 import { Appointment } from "@/types/appointment";
+import { SalonClient } from "@/types/client";
+import { SalonStore } from "@/lib/storage/localStore";
 import { formatBRL } from "@/lib/utils";
-import { X, Calendar, Clock, Sparkles, Scissors, CheckCircle2 } from "lucide-react";
+import { X, Calendar, Clock, Sparkles, Scissors, CheckCircle2, Search, UserCheck } from "lucide-react";
 
 interface NewAppointmentModalProps {
   services: ServiceItem[];
+  clients?: SalonClient[];
   prefilledDate?: string;
   prefilledTime?: string;
   onSave: (appointment: Appointment) => void;
@@ -16,6 +19,7 @@ interface NewAppointmentModalProps {
 
 export function NewAppointmentModal({
   services,
+  clients,
   prefilledDate = "2026-10-17",
   prefilledTime = "09:00",
   onSave,
@@ -29,6 +33,44 @@ export function NewAppointmentModal({
   const [date, setDate] = useState(prefilledDate);
   const [time, setTime] = useState(prefilledTime);
   const [notes, setNotes] = useState("");
+
+  // Autocomplete de clientes
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [clientList, setClientList] = useState<SalonClient[]>(() => {
+    if (clients && clients.length > 0) return clients;
+    return typeof window !== "undefined" ? SalonStore.getClients() : [];
+  });
+
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      setClientList(clients);
+    } else {
+      setClientList(SalonStore.getClients());
+    }
+  }, [clients]);
+
+  // Filtra clientes quando digitado 3+ caracteres
+  const searchResults = useMemo(() => {
+    const q = clientSearchQuery.trim().toLowerCase();
+    if (q.length < 3) return [];
+    return clientList.filter((c) => {
+      const cleanPhone = c.phone.replace(/\D/g, "");
+      const cleanQ = q.replace(/\D/g, "");
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (cleanQ.length >= 2 && cleanPhone.includes(cleanQ)) ||
+        (c.email && c.email.toLowerCase().includes(q))
+      );
+    });
+  }, [clientList, clientSearchQuery]);
+
+  const handleSelectClient = (c: SalonClient) => {
+    setClientName(c.name);
+    setClientPhone(c.phone);
+    setClientSearchQuery(c.name);
+    setIsDropdownOpen(false);
+  };
 
   const selectedService =
     services.find((s) => s.id === selectedServiceId) || services[0];
@@ -125,6 +167,102 @@ export function NewAppointmentModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Autocomplete de Clientes Cadastradas */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-[#2D1914]">
+                Buscar cliente cadastrada
+              </label>
+              <span className="text-[10px] text-stone-500">
+                (opcional — digite 3+ letras)
+              </span>
+            </div>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={clientSearchQuery}
+                onChange={(e) => {
+                  setClientSearchQuery(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                placeholder="Buscar por nome ou telefone..."
+                className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#E7DCCE] bg-[#FAF7F2]/60 focus:bg-white focus:border-[#C59B27] outline-none text-xs"
+              />
+              {clientSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientSearchQuery("");
+                    setIsDropdownOpen(false);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown de sugestões */}
+            {isDropdownOpen && clientSearchQuery.trim().length >= 3 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-[#E7DCCE] shadow-xl max-h-48 overflow-y-auto z-30 p-1.5 space-y-1">
+                {searchResults.length > 0 ? (
+                  searchResults.map((c) => {
+                    const last4 = c.phone.replace(/\D/g, "").slice(-4);
+                    const isVip =
+                      (c.totalAppointments || 0) >= 2 ||
+                      (c.totalSpent || 0) >= 500;
+                    const isReturn =
+                      c.lastVisitAt &&
+                      Math.floor(
+                        (Date.now() - new Date(c.lastVisitAt).getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      ) > 45;
+
+                    return (
+                      <button
+                        key={c.id || c.phone}
+                        type="button"
+                        onClick={() => handleSelectClient(c)}
+                        className="w-full text-left p-2 rounded-lg hover:bg-[#FAF7F2] flex items-center justify-between text-xs transition-colors border border-transparent hover:border-[#E7DCCE]"
+                      >
+                        <div>
+                          <span className="font-bold text-[#2D1914] block">
+                            {c.name}
+                          </span>
+                          <span className="text-[11px] text-stone-500">
+                            WhatsApp: ••••-{last4}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {isVip && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                              VIP
+                            </span>
+                          )}
+                          {isReturn && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300">
+                              Retorno
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="p-3 text-center text-[11px] text-stone-600">
+                    <span className="font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full mr-1.5 inline-block">
+                      Nova cliente
+                    </span>
+                    <span>Nenhum cadastro encontrado. Preencha manualmente abaixo.</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

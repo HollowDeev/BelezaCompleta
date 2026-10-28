@@ -6,6 +6,7 @@ import { Appointment } from "@/types/appointment";
 import { LuxuryProposal } from "@/types/proposal";
 import { TriageSubmission } from "@/types/triage";
 import { formatBRL, generateWhatsAppLink } from "@/lib/utils";
+import { RevenueRiskRadar } from "@/components/admin/RevenueRiskRadar";
 import {
   Users,
   Search,
@@ -147,8 +148,11 @@ export function ClientsManagerView({
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
-      {/* Topo do CRM */}
+    <div className="space-y-6">
+      <RevenueRiskRadar clients={clients} appointments={appointments} />
+
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
+        {/* Topo do CRM */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
         <div>
           <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold block">
@@ -681,6 +685,7 @@ export function ClientsManagerView({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

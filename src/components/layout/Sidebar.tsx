@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Zap,
   Calendar,
+  CalendarCheck,
   ClipboardList,
   FileText,
   Scissors,
@@ -22,6 +23,7 @@ import {
 export type AdminTab =
   | "operacao"
   | "agenda"
+  | "abertura-agenda"
   | "triagens"
   | "propostas"
   | "clientes"
@@ -35,6 +37,7 @@ interface SidebarProps {
   onSelectTab: (tab: AdminTab) => void;
   onViewAsClient: () => void;
   pendingTriageCount: number;
+  pendingPreReservationsCount?: number;
 }
 
 export function Sidebar({
@@ -42,6 +45,7 @@ export function Sidebar({
   onSelectTab,
   onViewAsClient,
   pendingTriageCount,
+  pendingPreReservationsCount = 0,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -58,6 +62,13 @@ export function Sidebar({
       id: "agenda" as AdminTab,
       label: "Agenda & Calendário",
       icon: Calendar,
+    },
+    {
+      id: "abertura-agenda" as AdminTab,
+      label: "Abertura de Agenda",
+      icon: CalendarCheck,
+      badge: pendingPreReservationsCount > 0 ? `${pendingPreReservationsCount}` : undefined,
+      badgeColor: "bg-amber-100 text-amber-900 font-bold animate-pulse",
     },
     {
       id: "triagens" as AdminTab,

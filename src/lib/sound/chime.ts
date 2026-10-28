@@ -121,6 +121,44 @@ class SoundAlertManager {
       console.warn("Falha ao reproduzir áudio Web Audio API:", e);
     }
   }
+
+  // Acorde triunfante para comemoração de meta batida
+  public playSuccessTone() {
+    if (this.isMuted) return;
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      // Arpejo ascendente alegre e elegante: C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, index) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = now + index * 0.1;
+        const dur = 0.55;
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.12, start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + dur);
+      });
+    } catch (e) {
+      console.warn("Falha ao reproduzir áudio Web Audio API:", e);
+    }
+  }
 }
 
 export const soundManager = new SoundAlertManager();
+
+export function playSuccessTone() {
+  soundManager.playSuccessTone();
+}

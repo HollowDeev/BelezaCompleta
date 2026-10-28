@@ -5,6 +5,13 @@ import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import {
+  AvailableDay,
+  PreReservation,
+  AvailabilityTemplate,
+  DayAvailabilityConfig,
+  PreReservationStatus,
+} from "@/types/availability";
+import {
   initialOrganization,
   initialProfiles,
   initialServices,
@@ -313,6 +320,182 @@ export class SalonStore {
     setStorageItem("active_client", client);
   }
 
+  // Disponibilidade e Abertura de Agenda
+  static getAvailableDays(
+    professionalId: string,
+    startDate?: string,
+    endDate?: string
+  ): AvailableDay[] {
+    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    return list.filter((d) => {
+      if (d.professionalId && professionalId && d.professionalId !== professionalId) {
+        // Aceita se for compatível ou ID padrão
+        const isMatch = d.professionalId === professionalId || 
+          d.professionalId === "58f26242-1e53-432e-b924-dea25ee2068a" ||
+          d.professionalId === "user-gleicy-ronha";
+        if (!isMatch) return false;
+      }
+      if (startDate && d.date < startDate) return false;
+      if (endDate && d.date > endDate) return false;
+      return true;
+    });
+  }
+
+  static saveAvailableDay(
+    day: DayAvailabilityConfig & { professionalId: string; orgId: string }
+  ): AvailableDay {
+    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    const existingIndex = list.findIndex(
+      (d) => d.date === day.date && (d.professionalId === day.professionalId || !d.professionalId)
+    );
+
+    const updated: AvailableDay = {
+      id: existingIndex >= 0 ? list[existingIndex].id : `avail-${Date.now()}-${day.date}`,
+      orgId: day.orgId,
+      professionalId: day.professionalId,
+      date: day.date,
+      startTime: day.startTime,
+      endTime: day.endTime,
+      breakStart: day.breakStart,
+      breakEnd: day.breakEnd,
+      isOpen: true,
+      maxClients: 8,
+      slotIntervalMin: 15,
+      customNotes: day.customNotes,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = updated;
+    } else {
+      list.push(updated);
+    }
+
+    setStorageItem("available_days", list);
+    return updated;
+  }
+
+  static saveAvailableDaysBatch(
+    days: (DayAvailabilityConfig & { professionalId: string; orgId: string })[]
+  ): number {
+    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    let count = 0;
+
+    days.forEach((day) => {
+      const existingIndex = list.findIndex(
+        (d) => d.date === day.date && (d.professionalId === day.professionalId || !d.professionalId)
+      );
+
+      const updated: AvailableDay = {
+        id: existingIndex >= 0 ? list[existingIndex].id : `avail-${Date.now()}-${day.date}-${count}`,
+        orgId: day.orgId,
+        professionalId: day.professionalId,
+        date: day.date,
+        startTime: day.startTime,
+        endTime: day.endTime,
+        breakStart: day.breakStart,
+        breakEnd: day.breakEnd,
+        isOpen: true,
+        maxClients: 8,
+        slotIntervalMin: 15,
+        customNotes: day.customNotes,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (existingIndex >= 0) {
+        list[existingIndex] = updated;
+      } else {
+        list.push(updated);
+      }
+      count++;
+    });
+
+    setStorageItem("available_days", list);
+    return count;
+  }
+
+  static closeAvailableDay(professionalId: string, date: string): boolean {
+    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    const existingIndex = list.findIndex(
+      (d) => d.date === date && (d.professionalId === professionalId || !d.professionalId)
+    );
+
+    if (existingIndex >= 0) {
+      list[existingIndex].isOpen = false;
+      list[existingIndex].updatedAt = new Date().toISOString();
+      setStorageItem("available_days", list);
+      return true;
+    }
+    return false;
+  }
+
+  // Pré-Reservas
+  static getPreReservations(orgId: string, status?: string): PreReservation[] {
+    const list = getStorageItem<PreReservation[]>("pre_reservations", initialPreReservations);
+    if (!status) return list;
+    return list.filter((p) => p.status === status);
+  }
+
+  static createPreReservation(
+    pr: Omit<PreReservation, "id" | "createdAt" | "updatedAt">
+  ): PreReservation {
+    const list = getStorageItem<PreReservation[]>("pre_reservations", initialPreReservations);
+    const newPr: PreReservation = {
+      ...pr,
+      id: `pr-${Date.now()}`,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    list.unshift(newPr);
+    setStorageItem("pre_reservations", list);
+    return newPr;
+  }
+
+  static updatePreReservationStatus(
+    id: string,
+    status: PreReservationStatus,
+    adminNotes?: string,
+    convertedAppointmentId?: string
+  ): boolean {
+    const list = getStorageItem<PreReservation[]>("pre_reservations", initialPreReservations);
+    const index = list.findIndex((p) => p.id === id);
+    if (index >= 0) {
+      list[index] = {
+        ...list[index],
+        status,
+        adminNotes: adminNotes ?? list[index].adminNotes,
+        convertedAppointmentId: convertedAppointmentId ?? list[index].convertedAppointmentId,
+        updatedAt: new Date().toISOString(),
+      };
+      setStorageItem("pre_reservations", list);
+      return true;
+    }
+    return false;
+  }
+
+  // Templates de Disponibilidade
+  static getAvailabilityTemplates(professionalId: string): AvailabilityTemplate[] {
+    return getStorageItem<AvailabilityTemplate[]>("availability_templates", initialAvailabilityTemplates);
+  }
+
+  static saveAvailabilityTemplate(
+    template: Omit<AvailabilityTemplate, "id" | "createdAt">
+  ): AvailabilityTemplate {
+    const list = getStorageItem<AvailabilityTemplate[]>(
+      "availability_templates",
+      initialAvailabilityTemplates
+    );
+    const newTpl: AvailabilityTemplate = {
+      ...template,
+      id: `tpl-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    list.push(newTpl);
+    setStorageItem("availability_templates", list);
+    return newTpl;
+  }
+
   static resetToDefaults(): void {
     if (typeof window === "undefined") return;
     localStorage.removeItem(STORAGE_KEY_PREFIX + "organization");
@@ -324,5 +507,136 @@ export class SalonStore {
     localStorage.removeItem(STORAGE_KEY_PREFIX + "appointments");
     localStorage.removeItem(STORAGE_KEY_PREFIX + "clients");
     localStorage.removeItem(STORAGE_KEY_PREFIX + "active_client");
+    localStorage.removeItem(STORAGE_KEY_PREFIX + "available_days");
+    localStorage.removeItem(STORAGE_KEY_PREFIX + "pre_reservations");
+    localStorage.removeItem(STORAGE_KEY_PREFIX + "availability_templates");
   }
 }
+
+// Mock inicial de dias abertos
+export const initialAvailableDays: AvailableDay[] = [
+  // Outubro 2026
+  "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24",
+  "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31",
+  // Novembro 2026
+  "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07",
+  "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14",
+  "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21",
+  "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28",
+].map((date, idx) => ({
+  id: `avail-init-${idx + 1}`,
+  orgId: "11111111-1111-4111-8111-111111111111",
+  professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+  date,
+  startTime: "09:00",
+  endTime: "19:00",
+  breakStart: "12:30",
+  breakEnd: "13:30",
+  isOpen: true,
+  maxClients: 8,
+  slotIntervalMin: 15,
+  customNotes: "Atendimento presencial com diagnóstico capilar",
+  createdAt: "2026-10-01T00:00:00Z",
+}));
+
+// Mock inicial de pré-reservas
+export const initialPreReservations: PreReservation[] = [
+  {
+    id: "pr-vanessa-guimaraes",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    serviceId: "srv-mechas-platinum",
+    serviceName: "Mechas Platinum & Iluminado",
+    clientName: "Vanessa Guimarães",
+    clientPhone: "(11) 98765-1122",
+    clientEmail: "vanessa.guimaraes@gmail.com",
+    requestedDate: "2026-11-28",
+    preferredPeriod: "tarde",
+    status: "pending",
+    adminNotes: "Casamento da irmã - solicitou abertura especial",
+    createdAt: "2026-10-25T14:20:00Z",
+  },
+  {
+    id: "pr-beatriz-mendonca",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    serviceId: "srv-iluminado-chocolate",
+    serviceName: "Morena Iluminada Chocolate",
+    clientName: "Beatriz Mendonça",
+    clientPhone: "(11) 97123-4567",
+    clientEmail: "beatriz.mendonca@advocacia.com",
+    requestedDate: "2026-12-05",
+    preferredPeriod: "manha",
+    preferredTime: "09:30",
+    status: "pending",
+    adminNotes: "Formatura de faculdade de Direito",
+    createdAt: "2026-10-26T10:15:00Z",
+  },
+  {
+    id: "pr-camila-silveira",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    serviceId: "srv-cronograma-luxo",
+    serviceName: "Cronograma Capilar Alta Performance",
+    clientName: "Camila Silveira",
+    clientPhone: "(11) 99887-6543",
+    clientEmail: "camila.silveira@uol.com.br",
+    requestedDate: "2026-12-08",
+    preferredPeriod: "especifico",
+    preferredTime: "14:00",
+    status: "pending",
+    adminNotes: "Viagem de férias para o litoral",
+    createdAt: "2026-10-27T16:45:00Z",
+  },
+  {
+    id: "pr-mariana-rocha-aprovada",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    serviceId: "srv-corte-alinhamento",
+    serviceName: "Corte Geométrico & Alinhamento",
+    clientName: "Mariana Rocha",
+    clientPhone: "(11) 96543-2109",
+    clientEmail: "mariana.rocha@hotmail.com",
+    requestedDate: "2026-11-14",
+    preferredPeriod: "tarde",
+    status: "approved",
+    adminNotes: "Dia aberto e horário confirmado com a cliente",
+    createdAt: "2026-10-22T09:00:00Z",
+  },
+];
+
+// Mock inicial de templates
+export const initialAvailabilityTemplates: AvailabilityTemplate[] = [
+  {
+    id: "tpl-semana-padrao",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    name: "Semana Padrão Ter-Sáb (09h-19h)",
+    daysConfig: [
+      { dayOfWeek: 0, startTime: "09:00", endTime: "19:00", isEnabled: false },
+      { dayOfWeek: 1, startTime: "09:00", endTime: "19:00", isEnabled: false },
+      { dayOfWeek: 2, startTime: "09:00", endTime: "19:00", breakStart: "12:30", breakEnd: "13:30", isEnabled: true },
+      { dayOfWeek: 3, startTime: "09:00", endTime: "19:00", breakStart: "12:30", breakEnd: "13:30", isEnabled: true },
+      { dayOfWeek: 4, startTime: "09:00", endTime: "19:00", breakStart: "12:30", breakEnd: "13:30", isEnabled: true },
+      { dayOfWeek: 5, startTime: "09:00", endTime: "19:00", breakStart: "12:30", breakEnd: "13:30", isEnabled: true },
+      { dayOfWeek: 6, startTime: "09:00", endTime: "19:00", breakStart: "12:30", breakEnd: "13:30", isEnabled: true },
+    ],
+    createdAt: "2026-10-01T00:00:00Z",
+  },
+  {
+    id: "tpl-semana-pico",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
+    name: "Semana de Pico & Festas (08h30-20h30)",
+    daysConfig: [
+      { dayOfWeek: 0, startTime: "08:30", endTime: "20:30", isEnabled: false },
+      { dayOfWeek: 1, startTime: "08:30", endTime: "20:30", isEnabled: false },
+      { dayOfWeek: 2, startTime: "08:30", endTime: "20:30", breakStart: "12:00", breakEnd: "13:00", isEnabled: true },
+      { dayOfWeek: 3, startTime: "08:30", endTime: "20:30", breakStart: "12:00", breakEnd: "13:00", isEnabled: true },
+      { dayOfWeek: 4, startTime: "08:30", endTime: "20:30", breakStart: "12:00", breakEnd: "13:00", isEnabled: true },
+      { dayOfWeek: 5, startTime: "08:30", endTime: "20:30", breakStart: "12:00", breakEnd: "13:00", isEnabled: true },
+      { dayOfWeek: 6, startTime: "08:30", endTime: "20:30", breakStart: "12:00", breakEnd: "13:00", isEnabled: true },
+    ],
+    createdAt: "2026-10-01T00:00:00Z",
+  },
+];

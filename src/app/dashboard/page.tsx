@@ -15,14 +15,19 @@ import { TriageFormsManagerView } from "@/components/admin/TriageFormsManagerVie
 import { FinancialOverview } from "@/components/admin/FinancialOverview";
 import { ClientsManagerView } from "@/components/admin/ClientsManagerView";
 import { NewAppointmentModal } from "@/components/admin/NewAppointmentModal";
+import { FloatingPill } from "@/components/admin/FloatingPill";
+import { AvailabilityManagerView } from "@/components/admin/AvailabilityManagerView";
+import { PreReservationQueue } from "@/components/admin/PreReservationQueue";
 import { ProposalBuilderModal } from "@/components/proposal/ProposalBuilderModal";
 import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
+import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 
 import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
+import { PreReservation } from "@/types/availability";
 import { SalonOrganization, UserProfile, DashboardMode } from "@/types/salon";
 import {
   Sparkles,
@@ -57,6 +62,7 @@ export default function DashboardPage() {
   const [proposalTemplates, setProposalTemplates] = useState<ProposalTemplate[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<SalonClient[]>([]);
+  const [preReservations, setPreReservations] = useState<PreReservation[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
 
@@ -67,6 +73,32 @@ export default function DashboardPage() {
   const [activeSubmissionForProposal, setActiveSubmissionForProposal] = useState<TriageSubmission | null>(null);
   const [editingProposal, setEditingProposal] = useState<LuxuryProposal | null>(null);
   const [viewingProposalModal, setViewingProposalModal] = useState<LuxuryProposal | null>(null);
+
+  // Atalhos de teclado globais do Dashboard
+  useKeyboardShortcuts({
+    onNewAppointment: () => {
+      setNewAppointmentPrefill({});
+      setIsNewAppointmentModalOpen(true);
+    },
+    onGoToToday: () => {
+      const today = new Date().toISOString().split("T")[0];
+      setSelectedDate(today);
+    },
+    onPrevDay: () => {
+      setSelectedDate((prev) => {
+        const d = new Date(prev + "T00:00:00");
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().split("T")[0];
+      });
+    },
+    onNextDay: () => {
+      setSelectedDate((prev) => {
+        const d = new Date(prev + "T00:00:00");
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split("T")[0];
+      });
+    },
+  });
 
   // Verificação de autenticação
   useEffect(() => {
@@ -79,7 +111,7 @@ export default function DashboardPage() {
   const refreshAll = async () => {
     setIsLoadingData(true);
     try {
-      const [org, profs, srvs, forms, subs, props, tpls, apts, clis] = await Promise.all([
+      const [org, profs, srvs, forms, subs, props, tpls, apts, clis, preRes] = await Promise.all([
         SupabaseDataService.getOrganization(),
         SupabaseDataService.getProfiles(),
         SupabaseDataService.getServices(),
@@ -89,6 +121,7 @@ export default function DashboardPage() {
         SupabaseDataService.getProposalTemplates(),
         SupabaseDataService.getAppointments(),
         SupabaseDataService.getClients(),
+        SupabaseDataService.getPreReservations("11111111-1111-4111-8111-111111111111"),
       ]);
 
       setOrganization(org);
@@ -100,6 +133,7 @@ export default function DashboardPage() {
       setProposalTemplates(tpls);
       setAppointments(apts);
       setClients(clis);
+      setPreReservations(preRes || []);
 
       if (profile?.dashboardMode) {
         setDashboardMode(profile.dashboardMode);
@@ -179,6 +213,7 @@ export default function DashboardPage() {
   }
 
   const pendingTriageCount = triageSubmissions.filter((s) => s.status === "pending_review").length;
+  const pendingPreReservationsCount = preReservations.filter((p) => p.status === "pending").length;
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#33302C] flex">
@@ -188,6 +223,7 @@ export default function DashboardPage() {
         onSelectTab={handleSelectTab}
         onViewAsClient={() => router.push("/")}
         pendingTriageCount={pendingTriageCount}
+        pendingPreReservationsCount={pendingPreReservationsCount}
       />
 
       {/* Conteúdo Principal do Painel */}
@@ -304,18 +340,69 @@ export default function DashboardPage() {
             />
           )}
 
+          {adminTab === "abertura-agenda" && (
+            <div className="space-y-8">
+              <AvailabilityManagerView
+                orgId={organization?.id || "11111111-1111-4111-8111-111111111111"}
+                professionalId={profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a"}
+                dataService={SupabaseDataService}
+                appointments={appointments}
+              />
+              <PreReservationQueue
+                orgId={organization?.id || "11111111-1111-4111-8111-111111111111"}
+                professionalId={profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a"}
+                dataService={SupabaseDataService}
+                onConvertToAppointment={(pr) => {
+                  setNewAppointmentPrefill({
+                    date: pr.requestedDate,
+                    time: pr.preferredTime || (pr.preferredPeriod === "manha" ? "09:30" : "14:00"),
+                  });
+                  setIsNewAppointmentModalOpen(true);
+                }}
+                onViewTriage={(subId) => {
+                  const sub = triageSubmissions.find((s) => s.id === subId);
+                  if (sub) {
+                    setActiveSubmissionForProposal(sub);
+                  }
+                }}
+              />
+            </div>
+          )}
+
           {adminTab === "triagens" && (
-            <TriageReviewQueue
-              submissions={triageSubmissions}
-              services={services}
-              onGenerateProposal={(proposal: LuxuryProposal) => {
-                handleSaveProposal(proposal);
-              }}
-              onViewProposal={(propId: string) => {
-                const prop = proposals.find((p) => p.id === propId);
-                if (prop) setViewingProposalModal(prop);
-              }}
-            />
+            <div className="space-y-8">
+              <TriageReviewQueue
+                submissions={triageSubmissions}
+                services={services}
+                onGenerateProposal={(proposal: LuxuryProposal) => {
+                  handleSaveProposal(proposal);
+                }}
+                onViewProposal={(propId: string) => {
+                  const prop = proposals.find((p) => p.id === propId);
+                  if (prop) setViewingProposalModal(prop);
+                }}
+              />
+              <div className="pt-2">
+                <PreReservationQueue
+                  orgId={organization?.id || "11111111-1111-4111-8111-111111111111"}
+                  professionalId={profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a"}
+                  dataService={SupabaseDataService}
+                  onConvertToAppointment={(pr) => {
+                    setNewAppointmentPrefill({
+                      date: pr.requestedDate,
+                      time: pr.preferredTime || (pr.preferredPeriod === "manha" ? "09:30" : "14:00"),
+                    });
+                    setIsNewAppointmentModalOpen(true);
+                  }}
+                  onViewTriage={(subId) => {
+                    const sub = triageSubmissions.find((s) => s.id === subId);
+                    if (sub) {
+                      setActiveSubmissionForProposal(sub);
+                    }
+                  }}
+                />
+              </div>
+            </div>
           )}
 
           {adminTab === "propostas" && (
@@ -375,10 +462,14 @@ export default function DashboardPage() {
         </main>
       </div>
 
+      {/* Ilha Dinâmica Flutuante de Pausa Química */}
+      <FloatingPill activeChemicalPause={null} />
+
       {/* Modal Novo Agendamento */}
       {isNewAppointmentModalOpen && (
         <NewAppointmentModal
           services={services}
+          clients={clients}
           prefilledDate={newAppointmentPrefill.date}
           prefilledTime={newAppointmentPrefill.time}
           onSave={handleSaveNewAppointment}

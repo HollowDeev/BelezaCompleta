@@ -1006,12 +1006,15 @@ export class SupabaseDataService {
     startDate: string,
     endDate: string
   ): Promise<AvailableDay[]> {
+    const validProfId = resolveValidUuid(professionalId, DEFAULT_GLEICY_ID) || professionalId;
+    if (!isSupabaseConfigured || !supabase) {
+      return SalonStore.getAvailableDays(validProfId, startDate, endDate);
+    }
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { data, error } = await supabase
         .from('available_days')
         .select('*')
-        .eq('professional_id', professionalId)
+        .eq('professional_id', validProfId)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: true });
@@ -1019,21 +1022,32 @@ export class SupabaseDataService {
       return (data || []).map(this.mapAvailableDay);
     } catch (err) {
       console.error('getAvailableDays error:', err);
-      return [];
+      return SalonStore.getAvailableDays(validProfId, startDate, endDate);
     }
   }
 
   static async saveAvailableDay(
     day: DayAvailabilityConfig & { professionalId: string; orgId: string }
   ): Promise<AvailableDay | null> {
+    const validOrgId = resolveValidUuid(day.orgId, DEFAULT_ORG_ID) || day.orgId;
+    const validProfId = resolveValidUuid(day.professionalId, DEFAULT_GLEICY_ID) || day.professionalId;
+    
+    // Salva localmente primeiro para sincronia imediata
+    const localSaved = SalonStore.saveAvailableDay({
+      ...day,
+      orgId: validOrgId,
+      professionalId: validProfId,
+    });
+
+    if (!isSupabaseConfigured || !supabase) return localSaved;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { data, error } = await supabase
         .from('available_days')
         .upsert(
           {
-            org_id: day.orgId,
-            professional_id: day.professionalId,
+            org_id: validOrgId,
+            professional_id: validProfId,
             date: day.date,
             start_time: day.startTime,
             end_time: day.endTime,
@@ -1051,16 +1065,26 @@ export class SupabaseDataService {
       return this.mapAvailableDay(data);
     } catch (err) {
       console.error('saveAvailableDay error:', err);
-      return null;
+      return localSaved;
     }
   }
 
   static async saveAvailableDaysBatch(
     days: (DayAvailabilityConfig & { professionalId: string; orgId: string })[]
   ): Promise<number> {
+    const sanitizedDays = days.map((d) => ({
+      ...d,
+      orgId: resolveValidUuid(d.orgId, DEFAULT_ORG_ID) || d.orgId,
+      professionalId: resolveValidUuid(d.professionalId, DEFAULT_GLEICY_ID) || d.professionalId,
+    }));
+
+    // Salva localmente primeiro
+    const localCount = SalonStore.saveAvailableDaysBatch(sanitizedDays);
+
+    if (!isSupabaseConfigured || !supabase) return localCount;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
-      const rows = days.map((d) => ({
+      const rows = sanitizedDays.map((d) => ({
         org_id: d.orgId,
         professional_id: d.professionalId,
         date: d.date,
@@ -1079,33 +1103,40 @@ export class SupabaseDataService {
       return count || days.length;
     } catch (err) {
       console.error('saveAvailableDaysBatch error:', err);
-      return 0;
+      return localCount;
     }
   }
 
   static async closeAvailableDay(professionalId: string, date: string): Promise<boolean> {
+    const validProfId = resolveValidUuid(professionalId, DEFAULT_GLEICY_ID) || professionalId;
+    SalonStore.closeAvailableDay(validProfId, date);
+
+    if (!isSupabaseConfigured || !supabase) return true;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { error } = await supabase
         .from('available_days')
         .update({ is_open: false, updated_at: new Date().toISOString() })
-        .eq('professional_id', professionalId)
+        .eq('professional_id', validProfId)
         .eq('date', date);
       if (error) throw error;
       return true;
     } catch (err) {
       console.error('closeAvailableDay error:', err);
-      return false;
+      return true;
     }
   }
 
   static async getPreReservations(orgId: string, status?: string): Promise<PreReservation[]> {
+    const validOrgId = resolveValidUuid(orgId, DEFAULT_ORG_ID) || orgId;
+    if (!isSupabaseConfigured || !supabase) {
+      return SalonStore.getPreReservations(validOrgId, status);
+    }
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       let query = supabase
         .from('pre_reservations')
         .select('*, services(title)')
-        .eq('org_id', orgId)
+        .eq('org_id', validOrgId)
         .order('created_at', { ascending: false });
       if (status) query = query.eq('status', status);
       const { data, error } = await query;
@@ -1113,28 +1144,40 @@ export class SupabaseDataService {
       return (data || []).map(this.mapPreReservation);
     } catch (err) {
       console.error('getPreReservations error:', err);
-      return [];
+      return SalonStore.getPreReservations(validOrgId, status);
     }
   }
 
   static async createPreReservation(
     pr: Omit<PreReservation, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<PreReservation | null> {
+    const validOrgId = resolveValidUuid(pr.orgId, DEFAULT_ORG_ID) || pr.orgId;
+    const validProfId = resolveValidUuid(pr.professionalId, DEFAULT_GLEICY_ID) || pr.professionalId;
+    const validSrvId = resolveValidUuid(pr.serviceId);
+
+    const localSaved = SalonStore.createPreReservation({
+      ...pr,
+      orgId: validOrgId,
+      professionalId: validProfId,
+      serviceId: validSrvId || pr.serviceId,
+    });
+
+    if (!isSupabaseConfigured || !supabase) return localSaved;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { data, error } = await supabase
         .from('pre_reservations')
         .insert({
-          org_id: pr.orgId,
-          professional_id: pr.professionalId,
-          service_id: pr.serviceId || null,
+          org_id: validOrgId,
+          professional_id: validProfId,
+          service_id: validSrvId || null,
           client_name: pr.clientName,
           client_phone: pr.clientPhone,
           client_email: pr.clientEmail || null,
           requested_date: pr.requestedDate,
           preferred_period: pr.preferredPeriod,
           preferred_time: pr.preferredTime || null,
-          triage_submission_id: pr.triageSubmissionId || null,
+          triage_submission_id: resolveValidUuid(pr.triageSubmissionId) || null,
           status: 'pending',
         })
         .select()
@@ -1143,7 +1186,7 @@ export class SupabaseDataService {
       return this.mapPreReservation(data);
     } catch (err) {
       console.error('createPreReservation error:', err);
-      return null;
+      return localSaved;
     }
   }
 
@@ -1153,14 +1196,17 @@ export class SupabaseDataService {
     adminNotes?: string,
     convertedAppointmentId?: string
   ): Promise<boolean> {
+    SalonStore.updatePreReservationStatus(id, status, adminNotes, convertedAppointmentId);
+
+    if (!isSupabaseConfigured || !supabase) return true;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { error } = await supabase
         .from('pre_reservations')
         .update({
           status,
           admin_notes: adminNotes || null,
-          converted_appointment_id: convertedAppointmentId || null,
+          converted_appointment_id: resolveValidUuid(convertedAppointmentId) || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);
@@ -1168,36 +1214,49 @@ export class SupabaseDataService {
       return true;
     } catch (err) {
       console.error('updatePreReservationStatus error:', err);
-      return false;
+      return true;
     }
   }
 
   static async getAvailabilityTemplates(professionalId: string): Promise<AvailabilityTemplate[]> {
+    const validProfId = resolveValidUuid(professionalId, DEFAULT_GLEICY_ID) || professionalId;
+    if (!isSupabaseConfigured || !supabase) {
+      return SalonStore.getAvailabilityTemplates(validProfId);
+    }
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { data, error } = await supabase
         .from('availability_templates')
         .select('*')
-        .eq('professional_id', professionalId)
+        .eq('professional_id', validProfId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data || []).map(this.mapAvailabilityTemplate);
     } catch (err) {
       console.error('getAvailabilityTemplates error:', err);
-      return [];
+      return SalonStore.getAvailabilityTemplates(validProfId);
     }
   }
 
   static async saveAvailabilityTemplate(
     template: Omit<AvailabilityTemplate, 'id' | 'createdAt'>
   ): Promise<AvailabilityTemplate | null> {
+    const validOrgId = resolveValidUuid(template.orgId, DEFAULT_ORG_ID) || template.orgId;
+    const validProfId = resolveValidUuid(template.professionalId, DEFAULT_GLEICY_ID) || template.professionalId;
+
+    const localSaved = SalonStore.saveAvailabilityTemplate({
+      ...template,
+      orgId: validOrgId,
+      professionalId: validProfId,
+    });
+
+    if (!isSupabaseConfigured || !supabase) return localSaved;
+
     try {
-      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
       const { data, error } = await supabase
         .from('availability_templates')
         .insert({
-          org_id: template.orgId,
-          professional_id: template.professionalId,
+          org_id: validOrgId,
+          professional_id: validProfId,
           name: template.name,
           days_config: template.daysConfig,
         })
@@ -1207,7 +1266,7 @@ export class SupabaseDataService {
       return this.mapAvailabilityTemplate(data);
     } catch (err) {
       console.error('saveAvailabilityTemplate error:', err);
-      return null;
+      return localSaved;
     }
   }
 
