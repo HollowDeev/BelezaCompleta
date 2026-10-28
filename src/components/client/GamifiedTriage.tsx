@@ -390,9 +390,9 @@ export function GamifiedTriage({
   }
 
   return (
-    <div className="max-w-3xl mx-auto my-6 px-4">
+    <div className="w-full">
       {/* Barra de Progresso Luxuosa */}
-      <div className="mb-6">
+      <div className="mb-5">
         <div className="flex items-center justify-between text-xs text-[#7B493B] font-semibold mb-2">
           <span>
             {isIdentificationStep
@@ -409,7 +409,7 @@ export function GamifiedTriage({
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-6 sm:p-9 shadow-xl border border-[#E7DCCE]">
+      <div className="bg-white rounded-3xl p-4 sm:p-7 border border-[#E7DCCE]">
         {/* Passos de Perguntas */}
         {!isIdentificationStep && currentQuestion && (
           <div className="space-y-6">

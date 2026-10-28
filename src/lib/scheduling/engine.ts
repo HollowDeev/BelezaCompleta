@@ -100,18 +100,36 @@ export function buildDayTimeline(
  * Calcula os horários disponíveis para agendamento, testando encaixes
  * durante as pausas químicas existentes respeitando a tolerância e o limite de 1 paralelo.
  */
+export interface SalonScheduleConfig {
+  openMinutes?: number; // 08:30 (510 min)
+  closeMinutes?: number; // 19:00 (1140 min)
+  slotIntervalMinutes?: number; // Intervalo de busca (15 min)
+  maxParallelInPause?: number;
+  breakStartMinutes?: number; // Pausa de almoço início em minutos
+  breakEndMinutes?: number;   // Pausa de almoço fim em minutos
+}
+
 export function calculateAvailableSlots(
   service: ServiceItem,
   date: string,
   professionalId: string,
   existingAppointments: Appointment[],
-  salonConfig = {
+  salonConfig: SalonScheduleConfig = {
     openMinutes: 8 * 60 + 30, // 08:30
     closeMinutes: 19 * 60, // 19:00
-    slotIntervalMinutes: 15, // Intervalo de busca (15 em 15 min)
+    slotIntervalMinutes: 15,
     maxParallelInPause: 1,
   }
 ): AvailableSlot[] {
+  const config = {
+    openMinutes: salonConfig.openMinutes ?? 8 * 60 + 30,
+    closeMinutes: salonConfig.closeMinutes ?? 19 * 60,
+    slotIntervalMinutes: salonConfig.slotIntervalMinutes ?? 15,
+    maxParallelInPause: salonConfig.maxParallelInPause ?? 1,
+    breakStartMinutes: salonConfig.breakStartMinutes,
+    breakEndMinutes: salonConfig.breakEndMinutes,
+  };
+
   const dayTimeline = buildDayTimeline(
     existingAppointments,
     professionalId,
@@ -124,9 +142,9 @@ export function calculateAvailableSlots(
 
   // Varre o dia de 15 em 15 minutos
   for (
-    let candidateStart = salonConfig.openMinutes;
-    candidateStart + totalDuration <= salonConfig.closeMinutes;
-    candidateStart += salonConfig.slotIntervalMinutes
+    let candidateStart = config.openMinutes;
+    candidateStart + totalDuration <= config.closeMinutes;
+    candidateStart += config.slotIntervalMinutes
   ) {
     // Projeta os blocos do novo serviço começando em candidateStart
     let currentCursor = candidateStart;
@@ -139,6 +157,16 @@ export function calculateAvailableSlots(
     for (const step of service.steps) {
       const stepStart = currentCursor;
       const stepEnd = currentCursor + step.durationMin;
+
+      // Se colidir com a pausa de almoço da profissional (etapa ativa ou término do serviço)
+      if (
+        config.breakStartMinutes !== undefined &&
+        config.breakEndMinutes !== undefined &&
+        Math.max(stepStart, config.breakStartMinutes) < Math.min(stepEnd, config.breakEndMinutes)
+      ) {
+        isCollisionDetected = true;
+        break;
+      }
 
       // Se a etapa do NOVO serviço for ATIVA (exige profissional exclusiva)
       if (step.type === "active") {
