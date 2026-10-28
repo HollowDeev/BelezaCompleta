@@ -219,17 +219,32 @@ export function LinearTimelineMaster({
   };
 
   // Avançar manualmente uma etapa com 1 clique (avança a régua até o início da próxima)
+  const [undoState, setUndoState] = useState<{ aptId: string; prevMinutes: number; clientName: string } | null>(null);
+
   const handleManualAdvanceStep = (aptId: string) => {
     const targetApt = dayAppointments.find((a) => a.id === aptId);
     if (!targetApt || !targetApt.stepBlocks) return;
 
     const timing = getAppointmentTiming(targetApt);
     if (timing.activeStep) {
+      const prevMinutes = simulatedMinutes;
       const nextTimeMin = parseHHmmToMinutes(timing.activeStep.endTime);
       setSimulatedMinutes(nextTimeMin);
       warnedTimeUp.current[aptId] = false;
       warnedTwoMinutes.current[aptId] = false;
+
+      // Salva estado para botão Desfazer com timer de 6s
+      setUndoState({ aptId, prevMinutes, clientName: targetApt.clientName });
+      setTimeout(() => {
+        setUndoState((curr) => (curr?.prevMinutes === prevMinutes ? null : curr));
+      }, 6000);
     }
+  };
+
+  const handleUndoAdvance = () => {
+    if (!undoState) return;
+    setSimulatedMinutes(undoState.prevMinutes);
+    setUndoState(null);
   };
 
   // Adicionar +5 minutos de tolerância na etapa atual
@@ -719,12 +734,12 @@ export function LinearTimelineMaster({
                       >
                         <button
                           onClick={() => handleAddFiveMinutes(apt.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          className={`min-h-[46px] sm:min-h-[50px] px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold border transition-all active:scale-95 ${
                             isPause
                               ? "bg-amber-200 hover:bg-amber-300 text-amber-950 border-amber-300"
                               : isUpcoming
                               ? "bg-white hover:bg-stone-100 text-[#5E372C] border-[#E7DCCE]"
-                              : "bg-white/10 hover:bg-white/20 text-white border-white/15"
+                              : "bg-white/10 hover:bg-white/20 text-white border-white/20"
                           }`}
                           title="Adiciona 5 minutos de tolerância na etapa atual"
                         >
@@ -733,7 +748,7 @@ export function LinearTimelineMaster({
 
                         <button
                           onClick={() => handleManualAdvanceStep(apt.id)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all flex items-center space-x-1.5 active:scale-95 ${
+                          className={`min-h-[46px] sm:min-h-[50px] px-5 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center justify-center space-x-2 active:scale-95 flex-1 max-w-xs ${
                             isPause
                               ? "bg-amber-600 hover:bg-amber-700 text-white"
                               : "gold-gradient text-[#2D1914]"
@@ -746,7 +761,7 @@ export function LinearTimelineMaster({
                               ? "Levar ao Lavatório"
                               : "Concluir Etapa & Avançar"}
                           </span>
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -1148,6 +1163,21 @@ export function LinearTimelineMaster({
           )}
         </div>
       </div>
+
+      {/* Toast Flutuante de Desfazer Avanço de Etapa */}
+      {undoState && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#2D1914] text-white px-5 py-3 rounded-2xl shadow-2xl border border-[#C59B27]/60 flex items-center gap-3 animate-fade-in">
+          <span className="text-xs">
+            Etapa de <strong>{undoState.clientName}</strong> avançada.
+          </span>
+          <button
+            onClick={handleUndoAdvance}
+            className="px-3 py-1.5 rounded-xl bg-[#C59B27] text-[#2D1914] font-extrabold text-xs hover:bg-[#DBAE3B] transition-all shadow-xs flex items-center gap-1"
+          >
+            <span>↩️ Desfazer</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

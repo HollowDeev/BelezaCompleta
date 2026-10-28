@@ -314,8 +314,8 @@ export function LuxuryProposalPDF({
           </div>
 
           {/* Tabela de Investimento Resumido */}
-          <div className="overflow-hidden rounded-xl border border-[#E7DCCE] mt-6">
-            <table className="w-full text-left text-xs sm:text-sm">
+          <div className="overflow-x-auto rounded-xl border border-[#E7DCCE] mt-6">
+            <table className="w-full min-w-[420px] text-left text-xs sm:text-sm">
               <thead className="bg-[#2D1914] text-white uppercase text-[10px] sm:text-xs tracking-wider">
                 <tr>
                   <th className="py-3 px-4 font-medium">Serviço / Módulo</th>

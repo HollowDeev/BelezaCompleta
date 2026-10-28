@@ -150,21 +150,23 @@ export default function SaaSAdminPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/dashboard"
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#c59b27] to-[#8C6B1B] text-[#1E120E] text-xs font-bold shadow-md hover:brightness-110 transition-all flex items-center gap-1.5"
+              className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-[#c59b27] to-[#8C6B1B] text-[#1E120E] text-xs font-bold shadow-md hover:brightness-110 transition-all flex items-center gap-1.5"
             >
-              <span>Abrir Dashboard do Salão</span>
+              <span className="hidden sm:inline">Abrir Dashboard do Salão</span>
+              <span className="sm:hidden">Dashboard</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </Link>
 
             <Link
               href="/"
               target="_blank"
-              className="px-3.5 py-2 rounded-xl bg-[#2D1914] text-[#C4B2A7] hover:text-white border border-[#4A322B] text-xs font-medium transition-all flex items-center gap-1.5"
+              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-[#2D1914] text-[#C4B2A7] hover:text-white border border-[#4A322B] text-xs font-medium transition-all flex items-center gap-1.5"
             >
-              <span>Vitrine Cliente</span>
+              <span className="hidden sm:inline">Vitrine Cliente</span>
+              <span className="sm:hidden">Vitrine</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </Link>
 

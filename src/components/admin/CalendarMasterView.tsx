@@ -166,7 +166,7 @@ export function CalendarMasterView({
                 <div
                   key={dayNum}
                   onClick={() => onSelectDate(dateStr)}
-                  className={`h-24 sm:h-28 p-2 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
+                  className={`h-16 sm:h-28 p-1 sm:p-2 rounded-xl sm:rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
                     isSelected
                       ? "border-[#C59B27] bg-[#FDF9F0] ring-2 ring-[#C59B27]/30 shadow-xs"
                       : "border-[#E7DCCE] bg-white hover:border-[#AD841D]/60 hover:bg-[#FAF7F2]"
@@ -174,7 +174,7 @@ export function CalendarMasterView({
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+                      className={`text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
                         isSelected
                           ? "bg-[#2D1914] text-white"
                           : "text-[#2D1914]"
@@ -184,21 +184,30 @@ export function CalendarMasterView({
                     </span>
 
                     {hasPause && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500" title="Possui janelas de pausa química livres" />
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-500" title="Possui janelas de pausa química livres" />
                     )}
                   </div>
 
                   {dayApts.length > 0 ? (
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-bold text-[#2D1914] truncate">
-                        {dayApts.length} cliente(s)
+                    <div className="space-y-0.5 sm:space-y-1">
+                      {/* Em mobile, exibe contagem compacta com dot */}
+                      <div className="flex sm:hidden items-center justify-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                        <span className="text-[9px] font-extrabold text-[#2D1914]">{dayApts.length}</span>
                       </div>
-                      <div className="text-[10px] text-emerald-800 font-bold">
-                        {formatBRL(dayRevenue)}
+
+                      {/* Em desktop (sm:), exibe detalhes com faturamento */}
+                      <div className="hidden sm:block">
+                        <div className="text-[10px] font-bold text-[#2D1914] truncate">
+                          {dayApts.length} cliente(s)
+                        </div>
+                        <div className="text-[10px] text-emerald-800 font-bold">
+                          {formatBRL(dayRevenue)}
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <span className="text-[10px] text-stone-300">Livre</span>
+                    <span className="text-[9px] sm:text-[10px] text-stone-300 hidden sm:inline">Livre</span>
                   )}
                 </div>
               );
