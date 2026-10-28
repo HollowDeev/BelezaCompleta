@@ -51,10 +51,23 @@ export function ServiceManager({
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   // Espelhar Questionário
-  const handleMirror = () => {
+  const handleMirror = async () => {
     if (!targetServiceForMirror || !selectedBaseFormId) return;
 
-    SalonStore.mirrorTriageForm(selectedBaseFormId, targetServiceForMirror);
+    const clonedForm = SalonStore.mirrorTriageForm(selectedBaseFormId, targetServiceForMirror);
+
+    if (SupabaseDataService) {
+      try {
+        await SupabaseDataService.saveTriageForm(clonedForm);
+        await SupabaseDataService.saveService({
+          ...targetServiceForMirror,
+          requiresTriage: true,
+          triageFormId: clonedForm.id,
+        });
+      } catch (err) {
+        console.error("Erro ao persistir triagem espelhada no Supabase:", err);
+      }
+    }
 
     setFeedbackMsg(
       `Questionário espelhado com sucesso para "${targetServiceForMirror.title}"! Agora você pode personalizar as perguntas.`
@@ -158,12 +171,18 @@ export function ServiceManager({
                       <h3 className="font-editorial text-lg sm:text-xl font-bold text-[#2D1914]">
                         {service.title}
                       </h3>
-                      <span className="text-xs font-bold text-[#AD841D] bg-[#DBAE3B]/10 px-2.5 py-0.5 rounded-md border border-[#DBAE3B]/20">
-                        {formatBRL(service.price)}
-                      </span>
-                      {service.promotionalPrice && (
-                        <span className="text-xs text-stone-400 line-through">
-                          {formatBRL(service.promotionalPrice)}
+                      {service.promotionalPrice && service.promotionalPrice < service.price ? (
+                        <>
+                          <span className="text-xs font-bold text-[#AD841D] bg-[#DBAE3B]/10 px-2.5 py-0.5 rounded-md border border-[#DBAE3B]/20">
+                            {formatBRL(service.promotionalPrice)}
+                          </span>
+                          <span className="text-xs text-stone-400 line-through">
+                            {formatBRL(service.price)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs font-bold text-[#AD841D] bg-[#DBAE3B]/10 px-2.5 py-0.5 rounded-md border border-[#DBAE3B]/20">
+                          {formatBRL(service.price)}
                         </span>
                       )}
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">

@@ -234,3 +234,86 @@ CREATE POLICY "Public Read Appointments" ON public.appointments FOR SELECT USING
 CREATE POLICY "Public Insert Appointments" ON public.appointments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Appointments" ON public.appointments FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "Staff Manage Appointments" ON public.appointments FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ========================================================
+-- MÓDULO: GESTÃO DE DISPONIBILIDADE E PRÉ-RESERVAS
+-- ========================================================
+
+-- Dias específicos abertos pela profissional para agendamento
+CREATE TABLE IF NOT EXISTS public.available_days (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    professional_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    start_time VARCHAR(10) NOT NULL DEFAULT '08:30',
+    end_time VARCHAR(10) NOT NULL DEFAULT '19:00',
+    break_start VARCHAR(10),
+    break_end VARCHAR(10),
+    is_open BOOLEAN NOT NULL DEFAULT true,
+    max_clients INT DEFAULT 8,
+    slot_interval_min INT DEFAULT 15,
+    custom_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_professional_date UNIQUE (professional_id, date)
+);
+
+-- Solicitações de pré-reserva para datas fora da janela aberta
+CREATE TABLE IF NOT EXISTS public.pre_reservations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    professional_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    service_id UUID REFERENCES public.services(id) ON DELETE SET NULL,
+    client_name VARCHAR(255) NOT NULL,
+    client_phone VARCHAR(30) NOT NULL,
+    client_email VARCHAR(255),
+    requested_date DATE NOT NULL,
+    preferred_period VARCHAR(30) NOT NULL DEFAULT 'qualquer',
+    preferred_time VARCHAR(10),
+    triage_submission_id UUID REFERENCES public.triage_submissions(id) ON DELETE SET NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    converted_appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
+    admin_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Templates de semana reutilizáveis
+CREATE TABLE IF NOT EXISTS public.availability_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    professional_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    days_config JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_available_days_prof_date ON public.available_days(professional_id, date);
+CREATE INDEX IF NOT EXISTS idx_available_days_org_date ON public.available_days(org_id, date);
+CREATE INDEX IF NOT EXISTS idx_pre_reservations_status ON public.pre_reservations(status, requested_date);
+CREATE INDEX IF NOT EXISTS idx_pre_reservations_org ON public.pre_reservations(org_id, status);
+
+-- RLS
+ALTER TABLE public.available_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pre_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.availability_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read open available days" ON public.available_days
+    FOR SELECT USING (is_open = true);
+
+CREATE POLICY "Staff manage available days" ON public.available_days
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Public insert pre reservations" ON public.pre_reservations
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Public read pre reservations" ON public.pre_reservations
+    FOR SELECT USING (true);
+
+CREATE POLICY "Staff manage pre reservations" ON public.pre_reservations
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Staff manage availability templates" ON public.availability_templates
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+

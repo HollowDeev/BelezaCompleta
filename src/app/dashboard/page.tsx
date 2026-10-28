@@ -59,10 +59,6 @@ export default function DashboardPage() {
   const [clients, setClients] = useState<SalonClient[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // Lista de agendamentos estendida para o Painel Financeiro
-  const financialAppointments = useState(() => {
-    return appointments.length > 0 ? appointments : [];
-  })[0];
 
   // Modais e visualizadores
   const [selectedDate, setSelectedDate] = useState("2026-10-18");
@@ -372,7 +368,7 @@ export default function DashboardPage() {
           {adminTab === "financeiro" && (
             <FinancialOverview
               mode={dashboardMode}
-              appointments={financialAppointments}
+              appointments={appointments}
               services={services}
             />
           )}

@@ -32,8 +32,8 @@ export function CalendarMasterView({
   const [viewMode, setViewMode] = useState<"mes" | "semana" | "dia">("mes");
   const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 10 }); // Outubro 2026
 
-  // Mapeamento dos dias do mês de Outubro 2026 (31 dias, 01/10/2026 é Quinta-feira)
-  const daysInMonth = 31;
+  const daysInMonth = new Date(currentYearMonth.year, currentYearMonth.month, 0).getDate();
+  const startDayOffset = new Date(currentYearMonth.year, currentYearMonth.month - 1, 1).getDay();
   const monthNames = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
@@ -85,7 +85,14 @@ export function CalendarMasterView({
           </h2>
 
           <button
-            onClick={() => onSelectDate("2026-10-17")}
+            onClick={() => {
+              const now = new Date();
+              const y = now.getFullYear();
+              const m = now.getMonth() + 1;
+              const d = now.getDate();
+              setCurrentYearMonth({ year: y, month: m });
+              onSelectDate(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+            }}
             className="px-3 py-1 rounded-xl text-xs font-semibold text-[#AD841D] bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
           >
             Hoje
@@ -141,15 +148,15 @@ export function CalendarMasterView({
           </div>
 
           <div className="grid grid-cols-7 gap-2">
-            {/* Espaçamento inicial (Outubro 2026 começa na Quinta-feira = 4 dias em branco) */}
-            {[...Array(4)].map((_, i) => (
+            {/* Espaçamento inicial baseado no dia da semana em que o mês começa */}
+            {[...Array(startDayOffset)].map((_, i) => (
               <div key={`empty-${i}`} className="h-24 sm:h-28 rounded-2xl bg-[#FAF7F2]/40 border border-transparent" />
             ))}
 
             {/* Dias do Mês */}
             {[...Array(daysInMonth)].map((_, i) => {
               const dayNum = i + 1;
-              const dateStr = `2026-10-${String(dayNum).padStart(2, "0")}`;
+              const dateStr = `${currentYearMonth.year}-${String(currentYearMonth.month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
               const dayApts = appointments.filter((a) => a.date === dateStr && a.status !== "cancelled");
               const isSelected = selectedDate === dateStr;
               const hasPause = dayApts.some((a) => a.stepBlocks?.some((s) => s.type === "pause"));

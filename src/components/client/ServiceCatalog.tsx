@@ -103,11 +103,13 @@ export function ServiceCatalog({ services, onSelectService }: ServiceCatalogProp
                     {service.category.toUpperCase()}
                   </span>
                   <div className="text-xl font-bold font-editorial">
-                    {formatBRL(service.price)}
-                    {service.promotionalPrice && service.promotionalPrice < service.price && (
-                      <span className="text-xs text-amber-200 line-through ml-2 font-normal">
-                        {formatBRL(service.price)}
-                      </span>
+                    {service.promotionalPrice && service.promotionalPrice < service.price ? (
+                      <>
+                        <span className="font-bold text-amber-400">{formatBRL(service.promotionalPrice)}</span>
+                        <span className="text-xs line-through text-stone-400 ml-2 font-normal">{formatBRL(service.price)}</span>
+                      </>
+                    ) : (
+                      <span>{formatBRL(service.price)}</span>
                     )}
                   </div>
                 </div>

@@ -69,6 +69,14 @@ export default function ClientHomePage() {
   const [searchPhone, setSearchPhone] = useState("");
   const [searchResultProposal, setSearchResultProposal] = useState<LuxuryProposal | null>(null);
   const [searchNotFound, setSearchNotFound] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -529,7 +537,7 @@ export default function ClientHomePage() {
               isClientView={true}
               onApprove={async (propId: string) => {
                 await SupabaseDataService.approveProposal(propId);
-                alert("Proposta aprovada com sucesso! Seu horário foi confirmado na agenda.");
+                showToast("Proposta aprovada com sucesso! Seu horário foi confirmado na agenda.", "success");
                 setViewingProposal(null);
               }}
               onBack={() => setViewingProposal(null)}
@@ -691,6 +699,15 @@ export default function ClientHomePage() {
           © 2026 Glaicy Agenda SaaS. Todos os direitos reservados.
         </div>
       </footer>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-xl text-white font-semibold transition-all ${
+          toast.type === 'success' ? 'bg-amber-600 border border-amber-400' : 'bg-red-800'
+        }`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

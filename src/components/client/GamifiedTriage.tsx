@@ -75,6 +75,7 @@ export function GamifiedTriage({
 }: GamifiedTriageProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [stepValidationError, setStepValidationError] = useState<string | null>(null);
 
   // Sessão e Identificação
   const [activeClient, setActiveClient] = useState<SalonClient | null>(null);
@@ -159,6 +160,7 @@ export function GamifiedTriage({
           ctx.drawImage(img, 0, 0, width, height);
           const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.82);
           setUploadedPhotos((prev) => ({ ...prev, [slot]: compressedDataUrl }));
+          setStepValidationError(null);
         }
       };
       img.src = event.target?.result as string;
@@ -176,6 +178,7 @@ export function GamifiedTriage({
   const currentQuestion = form.questions[currentStepIndex];
 
   const handleSelectOption = (questionId: string, optionId: string, isMultiple = false) => {
+    setStepValidationError(null);
     if (isMultiple) {
       const current = (answers[questionId] as string[]) || [];
       const updated = current.includes(optionId)
@@ -198,6 +201,27 @@ export function GamifiedTriage({
 
   const handleNext = async () => {
     if (currentStepIndex < totalQuestions) {
+      if (currentQuestion && currentQuestion.required) {
+        let isAnswered = false;
+        if (currentQuestion.type === "photo_upload") {
+          isAnswered = Boolean(
+            uploadedPhotos.root || uploadedPhotos.length || uploadedPhotos.inspiration
+          );
+        } else if (currentQuestion.type === "multiple_choice") {
+          const val = answers[currentQuestion.id];
+          isAnswered = Array.isArray(val) && val.length > 0;
+        } else {
+          const val = answers[currentQuestion.id];
+          isAnswered = val !== undefined && val !== null && String(val).trim().length > 0;
+        }
+
+        if (!isAnswered) {
+          setStepValidationError("⚠️ Por favor, responda esta pergunta para continuar");
+          return;
+        }
+      }
+
+      setStepValidationError(null);
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
       // Submissão Final com Autenticação e Registro da Cliente
@@ -311,6 +335,7 @@ export function GamifiedTriage({
   };
 
   const handlePrev = () => {
+    setStepValidationError(null);
     if (currentStepIndex > 0) {
       setCurrentStepIndex(currentStepIndex - 1);
     } else {
@@ -564,13 +589,20 @@ export function GamifiedTriage({
                 <textarea
                   rows={4}
                   value={answers[currentQuestion.id] || ""}
-                  onChange={(e) =>
-                    setAnswers({ ...answers, [currentQuestion.id]: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setStepValidationError(null);
+                    setAnswers({ ...answers, [currentQuestion.id]: e.target.value });
+                  }}
                   placeholder={currentQuestion.placeholder || "Digite sua resposta..."}
                   className="w-full p-4 rounded-2xl border border-[#E7DCCE] focus:border-[#C59B27] focus:ring-2 focus:ring-[#C59B27]/20 outline-none text-xs sm:text-sm text-[#2D1914] bg-[#FDFBF7]"
                 />
               </div>
+            )}
+
+            {stepValidationError && (
+              <p className="text-red-400 text-sm mt-2 animate-pulse">
+                {stepValidationError}
+              </p>
             )}
           </div>
         )}

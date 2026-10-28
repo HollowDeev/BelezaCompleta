@@ -6,6 +6,15 @@ import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import { SalonStore } from "@/lib/storage/localStore";
+import {
+  AvailableDay,
+  PreReservation,
+  AvailabilityTemplate,
+  DayAvailabilityConfig,
+  PreferredPeriod,
+  PreReservationStatus,
+} from "@/types/availability";
+
 
 // Utilitários de Resolução de UUID para integridade com PostgreSQL
 export const isUuid = (str?: string | null): boolean =>
@@ -987,4 +996,284 @@ export class SupabaseDataService {
     SalonStore.setActiveClient(client);
     return { success: true, client };
   }
+
+  // =========================================
+  // MÓDULO: DISPONIBILIDADE E PRÉ-RESERVAS
+  // =========================================
+
+  static async getAvailableDays(
+    professionalId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<AvailableDay[]> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { data, error } = await supabase
+        .from('available_days')
+        .select('*')
+        .eq('professional_id', professionalId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(this.mapAvailableDay);
+    } catch (err) {
+      console.error('getAvailableDays error:', err);
+      return [];
+    }
+  }
+
+  static async saveAvailableDay(
+    day: DayAvailabilityConfig & { professionalId: string; orgId: string }
+  ): Promise<AvailableDay | null> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { data, error } = await supabase
+        .from('available_days')
+        .upsert(
+          {
+            org_id: day.orgId,
+            professional_id: day.professionalId,
+            date: day.date,
+            start_time: day.startTime,
+            end_time: day.endTime,
+            break_start: day.breakStart || null,
+            break_end: day.breakEnd || null,
+            is_open: true,
+            custom_notes: day.customNotes || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'professional_id,date' }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return this.mapAvailableDay(data);
+    } catch (err) {
+      console.error('saveAvailableDay error:', err);
+      return null;
+    }
+  }
+
+  static async saveAvailableDaysBatch(
+    days: (DayAvailabilityConfig & { professionalId: string; orgId: string })[]
+  ): Promise<number> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const rows = days.map((d) => ({
+        org_id: d.orgId,
+        professional_id: d.professionalId,
+        date: d.date,
+        start_time: d.startTime,
+        end_time: d.endTime,
+        break_start: d.breakStart || null,
+        break_end: d.breakEnd || null,
+        is_open: true,
+        custom_notes: d.customNotes || null,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error, count } = await supabase
+        .from('available_days')
+        .upsert(rows, { onConflict: 'professional_id,date' });
+      if (error) throw error;
+      return count || days.length;
+    } catch (err) {
+      console.error('saveAvailableDaysBatch error:', err);
+      return 0;
+    }
+  }
+
+  static async closeAvailableDay(professionalId: string, date: string): Promise<boolean> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { error } = await supabase
+        .from('available_days')
+        .update({ is_open: false, updated_at: new Date().toISOString() })
+        .eq('professional_id', professionalId)
+        .eq('date', date);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('closeAvailableDay error:', err);
+      return false;
+    }
+  }
+
+  static async getPreReservations(orgId: string, status?: string): Promise<PreReservation[]> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      let query = supabase
+        .from('pre_reservations')
+        .select('*, services(title)')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false });
+      if (status) query = query.eq('status', status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(this.mapPreReservation);
+    } catch (err) {
+      console.error('getPreReservations error:', err);
+      return [];
+    }
+  }
+
+  static async createPreReservation(
+    pr: Omit<PreReservation, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<PreReservation | null> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { data, error } = await supabase
+        .from('pre_reservations')
+        .insert({
+          org_id: pr.orgId,
+          professional_id: pr.professionalId,
+          service_id: pr.serviceId || null,
+          client_name: pr.clientName,
+          client_phone: pr.clientPhone,
+          client_email: pr.clientEmail || null,
+          requested_date: pr.requestedDate,
+          preferred_period: pr.preferredPeriod,
+          preferred_time: pr.preferredTime || null,
+          triage_submission_id: pr.triageSubmissionId || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return this.mapPreReservation(data);
+    } catch (err) {
+      console.error('createPreReservation error:', err);
+      return null;
+    }
+  }
+
+  static async updatePreReservationStatus(
+    id: string,
+    status: PreReservationStatus,
+    adminNotes?: string,
+    convertedAppointmentId?: string
+  ): Promise<boolean> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { error } = await supabase
+        .from('pre_reservations')
+        .update({
+          status,
+          admin_notes: adminNotes || null,
+          converted_appointment_id: convertedAppointmentId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('updatePreReservationStatus error:', err);
+      return false;
+    }
+  }
+
+  static async getAvailabilityTemplates(professionalId: string): Promise<AvailabilityTemplate[]> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { data, error } = await supabase
+        .from('availability_templates')
+        .select('*')
+        .eq('professional_id', professionalId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(this.mapAvailabilityTemplate);
+    } catch (err) {
+      console.error('getAvailabilityTemplates error:', err);
+      return [];
+    }
+  }
+
+  static async saveAvailabilityTemplate(
+    template: Omit<AvailabilityTemplate, 'id' | 'createdAt'>
+  ): Promise<AvailabilityTemplate | null> {
+    try {
+      if (!isSupabaseConfigured || !supabase) throw new Error('Supabase not configured');
+      const { data, error } = await supabase
+        .from('availability_templates')
+        .insert({
+          org_id: template.orgId,
+          professional_id: template.professionalId,
+          name: template.name,
+          days_config: template.daysConfig,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return this.mapAvailabilityTemplate(data);
+    } catch (err) {
+      console.error('saveAvailabilityTemplate error:', err);
+      return null;
+    }
+  }
+
+  // Mappers
+  private static mapAvailableDay(row: Record<string, unknown>): AvailableDay {
+    return {
+      id: row.id as string,
+      orgId: row.org_id as string,
+      professionalId: row.professional_id as string,
+      date: row.date as string,
+      startTime: row.start_time as string,
+      endTime: row.end_time as string,
+      breakStart: row.break_start as string | undefined,
+      breakEnd: row.break_end as string | undefined,
+      isOpen: row.is_open as boolean,
+      maxClients: (row.max_clients as number) || 8,
+      slotIntervalMin: (row.slot_interval_min as number) || 15,
+      customNotes: row.custom_notes as string | undefined,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  private static mapPreReservation(row: Record<string, unknown>): PreReservation {
+    const servicesRow = row.services as { title: string } | null;
+    return {
+      id: row.id as string,
+      orgId: row.org_id as string,
+      professionalId: row.professional_id as string,
+      serviceId: row.service_id as string | undefined,
+      serviceName: servicesRow?.title,
+      clientName: row.client_name as string,
+      clientPhone: row.client_phone as string,
+      clientEmail: row.client_email as string | undefined,
+      requestedDate: row.requested_date as string,
+      preferredPeriod: (row.preferred_period as PreferredPeriod) || 'qualquer',
+      preferredTime: row.preferred_time as string | undefined,
+      triageSubmissionId: row.triage_submission_id as string | undefined,
+      status: (row.status as PreReservationStatus) || 'pending',
+      convertedAppointmentId: row.converted_appointment_id as string | undefined,
+      adminNotes: row.admin_notes as string | undefined,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  private static mapAvailabilityTemplate(row: Record<string, unknown>): AvailabilityTemplate {
+    return {
+      id: row.id as string,
+      orgId: row.org_id as string,
+      professionalId: row.professional_id as string,
+      name: row.name as string,
+      daysConfig: (row.days_config as AvailabilityTemplate['daysConfig']) || [],
+      createdAt: row.created_at as string,
+    };
+  }
+
+  // Delegadores de instância
+  getAvailableDays = SupabaseDataService.getAvailableDays;
+  saveAvailableDay = SupabaseDataService.saveAvailableDay;
+  saveAvailableDaysBatch = SupabaseDataService.saveAvailableDaysBatch;
+  closeAvailableDay = SupabaseDataService.closeAvailableDay;
+  getPreReservations = SupabaseDataService.getPreReservations;
+  createPreReservation = SupabaseDataService.createPreReservation;
+  updatePreReservationStatus = SupabaseDataService.updatePreReservationStatus;
+  getAvailabilityTemplates = SupabaseDataService.getAvailabilityTemplates;
+  saveAvailabilityTemplate = SupabaseDataService.saveAvailabilityTemplate;
 }
+
