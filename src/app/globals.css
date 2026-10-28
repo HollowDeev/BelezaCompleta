@@ -1,26 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    --font-serif: var(--font-sans); /* Substituição por sans-serif geométrica estilo Gilroy */
+    
+    /* Paleta Luxo Orgânico & Alta Performance */
+    --chocolate-900: #1a0f0c;
+    --chocolate-800: #2d1914;
+    --chocolate-700: #44271f;
+    --chocolate-600: #5e372c;
+    --chocolate-500: #7b493b;
+
+    --gold-600: #ad841d;
+    --gold-500: #c59b27;
+    --gold-400: #dbae3b;
+    --gold-200: #f2e2b3;
+    --gold-100: #faebd2;
+    --gold-50: #fdfaf3;
+
+    --nude-50: #faf7f2;
+    --nude-100: #f3ece1;
+    --nude-200: #e7dcce;
+    --nude-300: #d6c5b2;
+
+    --charcoal-900: #141312;
+    --charcoal-800: #22201e;
+    --charcoal-700: #33302c;
+    --charcoal-600: #555049;
+
+    --background: #faf7f2;
+    --foreground: #22201e;
   }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tipografia moderna geométrica estilo Gilroy para títulos de destaque */
+.font-editorial {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* Glassmorphism sutil para estética premium */
+.glass-luxury {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(229, 212, 195, 0.7);
+}
+
+.glass-dark-luxury {
+  background: rgba(45, 25, 20, 0.95);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(197, 155, 39, 0.25);
+}
+
+/* Ouro metálico suave para botões e acentos */
+.gold-gradient {
+  background: linear-gradient(135deg, #dbae3b 0%, #c59b27 50%, #9e7515 100%);
+}
+
+.gold-gradient-subtle {
+  background: linear-gradient(135deg, #fdfaf3 0%, #fbf3e0 100%);
+}
+
+.chocolate-gradient {
+  background: linear-gradient(135deg, #2d1914 0%, #44271f 60%, #1a0f0c 100%);
+}
+
+/* Estilos de Impressão de Alta Qualidade para a Proposta em PDF */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #1a0f0c !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 24mm 20mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
 }

@@ -1,0 +1,327 @@
+"use client";
+
+import { useState } from "react";
+import { Appointment } from "@/types/appointment";
+import { formatBRL } from "@/lib/utils";
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Scissors,
+  Hourglass,
+  Plus,
+  Zap,
+} from "lucide-react";
+
+interface CalendarMasterViewProps {
+  appointments: Appointment[];
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  onNewAppointment: (prefilledDate?: string, prefilledTime?: string) => void;
+  onSelectProposal?: (proposalId: string) => void;
+}
+
+export function CalendarMasterView({
+  appointments,
+  selectedDate,
+  onSelectDate,
+  onNewAppointment,
+  onSelectProposal,
+}: CalendarMasterViewProps) {
+  const [viewMode, setViewMode] = useState<"mes" | "semana" | "dia">("mes");
+  const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 10 }); // Outubro 2026
+
+  // Mapeamento dos dias do mês de Outubro 2026 (31 dias, 01/10/2026 é Quinta-feira)
+  const daysInMonth = 31;
+  const monthNames = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
+  const handlePrevMonth = () => {
+    if (currentYearMonth.month === 1) {
+      setCurrentYearMonth({ year: currentYearMonth.year - 1, month: 12 });
+    } else {
+      setCurrentYearMonth({ ...currentYearMonth, month: currentYearMonth.month - 1 });
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentYearMonth.month === 12) {
+      setCurrentYearMonth({ year: currentYearMonth.year + 1, month: 1 });
+    } else {
+      setCurrentYearMonth({ ...currentYearMonth, month: currentYearMonth.month + 1 });
+    }
+  };
+
+  // Agendamentos filtrados para o dia selecionado
+  const selectedDayAppointments = appointments.filter(
+    (a) => a.date === selectedDate && a.status !== "cancelled"
+  );
+
+  return (
+    <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
+      {/* Topo do Calendário: Navegação e Seletor de Vistas */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={handlePrevMonth}
+              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#5E372C] transition-colors border border-[#E7DCCE]"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleNextMonth}
+              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#5E372C] transition-colors border border-[#E7DCCE]"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-bold text-[#2D1914] tracking-tight">
+            {monthNames[currentYearMonth.month - 1]} {currentYearMonth.year}
+          </h2>
+
+          <button
+            onClick={() => onSelectDate("2026-10-17")}
+            className="px-3 py-1 rounded-xl text-xs font-semibold text-[#AD841D] bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
+          >
+            Hoje
+          </button>
+        </div>
+
+        {/* Alternador de Vistas: Mês | Semana | Dia */}
+        <div className="flex items-center p-1 bg-[#FAF7F2] rounded-2xl border border-[#E7DCCE]">
+          <button
+            onClick={() => setViewMode("mes")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewMode === "mes"
+                ? "bg-[#2D1914] text-white shadow-xs"
+                : "text-[#5E372C] hover:text-[#2D1914]"
+            }`}
+          >
+            Visão Mensal
+          </button>
+          <button
+            onClick={() => setViewMode("semana")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewMode === "semana"
+                ? "bg-[#2D1914] text-white shadow-xs"
+                : "text-[#5E372C] hover:text-[#2D1914]"
+            }`}
+          >
+            Visão Semanal
+          </button>
+          <button
+            onClick={() => setViewMode("dia")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewMode === "dia"
+                ? "bg-[#2D1914] text-white shadow-xs"
+                : "text-[#5E372C] hover:text-[#2D1914]"
+            }`}
+          >
+            Visão Diária
+          </button>
+        </div>
+      </div>
+
+      {/* 1. VISÃO MENSAL (GRID DE DIAS COM BADGES E FATURAMENTO) */}
+      {viewMode === "mes" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-[#AD841D] uppercase tracking-wider mb-1">
+            <span>Dom</span>
+            <span>Seg</span>
+            <span>Ter</span>
+            <span>Qua</span>
+            <span>Qui</span>
+            <span>Sex</span>
+            <span>Sáb</span>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {/* Espaçamento inicial (Outubro 2026 começa na Quinta-feira = 4 dias em branco) */}
+            {[...Array(4)].map((_, i) => (
+              <div key={`empty-${i}`} className="h-24 sm:h-28 rounded-2xl bg-[#FAF7F2]/40 border border-transparent" />
+            ))}
+
+            {/* Dias do Mês */}
+            {[...Array(daysInMonth)].map((_, i) => {
+              const dayNum = i + 1;
+              const dateStr = `2026-10-${String(dayNum).padStart(2, "0")}`;
+              const dayApts = appointments.filter((a) => a.date === dateStr && a.status !== "cancelled");
+              const isSelected = selectedDate === dateStr;
+              const hasPause = dayApts.some((a) => a.stepBlocks?.some((s) => s.type === "pause"));
+              const dayRevenue = dayApts.reduce((sum, a) => sum + a.price, 0);
+
+              return (
+                <div
+                  key={dayNum}
+                  onClick={() => onSelectDate(dateStr)}
+                  className={`h-24 sm:h-28 p-2 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? "border-[#C59B27] bg-[#FDF9F0] ring-2 ring-[#C59B27]/30 shadow-xs"
+                      : "border-[#E7DCCE] bg-white hover:border-[#AD841D]/60 hover:bg-[#FAF7F2]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+                        isSelected
+                          ? "bg-[#2D1914] text-white"
+                          : "text-[#2D1914]"
+                      }`}
+                    >
+                      {dayNum}
+                    </span>
+
+                    {hasPause && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500" title="Possui janelas de pausa química livres" />
+                    )}
+                  </div>
+
+                  {dayApts.length > 0 ? (
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold text-[#2D1914] truncate">
+                        {dayApts.length} cliente(s)
+                      </div>
+                      <div className="text-[10px] text-emerald-800 font-bold">
+                        {formatBRL(dayRevenue)}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-stone-300">Livre</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Detalhe Rápido do Dia Selecionado */}
+          <div className="p-5 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-[#AD841D]">
+                Dia Selecionado: {selectedDate}
+              </span>
+              <h3 className="font-bold text-base text-[#2D1914]">
+                {selectedDayAppointments.length} agendamento(s) programado(s)
+              </h3>
+            </div>
+
+            <button
+              onClick={() => onNewAppointment(selectedDate)}
+              className="px-4 py-2 text-xs font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 flex items-center space-x-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Agendar Neste Dia</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. VISÃO SEMANAL (GRADE COM HORAS E PAUSAS LIVRES) */}
+      {viewMode === "semana" && (
+        <div className="space-y-4">
+          <p className="text-xs text-stone-600">
+            Semana de 12 a 18 de Outubro de 2026. As áreas em âmbar pontilhado representam janelas de químicas livres para encaixe:
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+            {["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"].map((date) => {
+              const dayApts = appointments.filter((a) => a.date === date && a.status !== "cancelled");
+              const isSelected = selectedDate === date;
+
+              return (
+                <div
+                  key={date}
+                  onClick={() => onSelectDate(date)}
+                  className={`p-3 rounded-2xl border transition-all ${
+                    isSelected ? "border-[#C59B27] bg-[#FDF9F0]" : "border-[#E7DCCE] bg-white"
+                  }`}
+                >
+                  <div className="border-b border-[#E7DCCE]/60 pb-2 mb-2 text-center">
+                    <span className="text-[10px] uppercase font-bold text-[#AD841D] block">
+                      {date.split("-")[2]}/10
+                    </span>
+                    <span className="text-xs font-bold text-[#2D1914]">
+                      {dayApts.length} atendimentos
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 min-h-48">
+                    {dayApts.length === 0 ? (
+                      <div className="text-[11px] text-stone-400 text-center pt-8">Sem clientes</div>
+                    ) : (
+                      dayApts.map((apt) => (
+                        <div key={apt.id} className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E7DCCE] text-xs">
+                          <span className="font-bold text-[#2D1914] block truncate">{apt.clientName}</span>
+                          <span className="text-[10px] text-stone-500 block truncate">{apt.serviceTitle}</span>
+                          <span className="text-[10px] font-mono font-bold text-[#AD841D]">
+                            {apt.startTime} - {apt.endTime}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. VISÃO DIÁRIA (MINUTO A MINUTO COM SLOTS DE ENCAIXE) */}
+      {viewMode === "dia" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#2D1914]">
+              Horários de {selectedDate}:
+            </span>
+            <button
+              onClick={() => onNewAppointment(selectedDate)}
+              className="px-3.5 py-1.5 text-xs font-bold text-white gold-gradient rounded-xl flex items-center space-x-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Novo Agendamento</span>
+            </button>
+          </div>
+
+          <div className="divide-y divide-[#E7DCCE]/60">
+            {["09:00", "10:00", "11:00", "13:30", "14:30", "16:00", "17:30"].map((slotTime) => {
+              const matchedApt = selectedDayAppointments.find((a) => a.startTime.startsWith(slotTime.slice(0, 2)));
+
+              return (
+                <div key={slotTime} className="py-3 flex items-center justify-between text-xs">
+                  <div className="w-16 font-mono font-bold text-[#AD841D]">{slotTime}</div>
+
+                  <div className="flex-1 px-4">
+                    {matchedApt ? (
+                      <div className="p-2.5 rounded-xl bg-[#2D1914] text-white flex items-center justify-between">
+                        <div>
+                          <span className="font-bold block">{matchedApt.clientName}</span>
+                          <span className="text-[10px] text-stone-300">{matchedApt.serviceTitle}</span>
+                        </div>
+                        <span className="font-bold text-[#DBAE3B]">{formatBRL(matchedApt.price)}</span>
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded-xl border border-dashed border-stone-300 text-stone-400 flex items-center justify-between hover:bg-stone-50 transition-colors">
+                        <span>Horário livre</span>
+                        <button
+                          onClick={() => onNewAppointment(selectedDate, slotTime)}
+                          className="text-[11px] text-[#AD841D] font-bold hover:underline"
+                        >
+                          + Agendar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
