@@ -1,78 +1,390 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-editorial: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-gwendolyn: "Gwendolyn", cursive;
+}
 
 @layer base {
   :root {
-    --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
-    --font-serif: var(--font-sans); /* Substituição por sans-serif geométrica estilo Gilroy */
+    --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+    --font-editorial: "DM Sans", system-ui, -apple-system, sans-serif;
+    --font-cursive: "Gwendolyn", cursive;
     
-    /* Paleta Luxo Orgânico & Alta Performance */
-    --chocolate-900: #1a0f0c;
-    --chocolate-800: #2d1914;
-    --chocolate-700: #44271f;
-    --chocolate-600: #5e372c;
-    --chocolate-500: #7b493b;
+    /* Cores Oficiais da Marca (Gleicy Ronha - Sofisticação Acolhedora) */
+    --brand-green-900: #122b2a; /* Pressionado */
+    --brand-green-800: #1d3d3c; /* Verde Profundo Oficial */
+    --brand-green-700: #28504d; /* Verde Hover */
+    --brand-green-500: #707956; /* Verde Oliva Suave */
+    --brand-green-200: #d3d0b5; /* Verde Areia */
+    --brand-green-50: #f0efe3;  /* Verde Suave */
 
-    --gold-600: #ad841d;
-    --gold-500: #c59b27;
-    --gold-400: #dbae3b;
-    --gold-200: #f2e2b3;
-    --gold-100: #faebd2;
-    --gold-50: #fdfaf3;
+    --brand-gold-700: #80611f;  /* Dourado Profundo */
+    --brand-gold-500: #c7a03a;  /* Dourado Oficial */
+    --brand-gold-400: #d9b85f;  /* Dourado Hover */
+    --brand-gold-100: #f6eccf;  /* Dourado Claro */
+    --brand-gold-50: #fcf9f0;   /* Dourado Fundo */
 
-    --nude-50: #faf7f2;
-    --nude-100: #f3ece1;
-    --nude-200: #e7dcce;
-    --nude-300: #d6c5b2;
+    --brand-cream: #fcf5eb;      /* Creme Oficial */
+    --brand-beige-soft: #eee8dd; /* Bege Suave */
+    --brand-border-soft: #d8d0bd;/* Borda Suave */
+    --brand-taupe: #736455;      /* Marrom Acinzentado (Texto de Leitura) */
+    --brand-disabled: #e5e1d6;
+    --brand-error: #9b3834;
 
-    --charcoal-900: #141312;
-    --charcoal-800: #22201e;
-    --charcoal-700: #33302c;
-    --charcoal-600: #555049;
+    /* Compatibilidade para transição progressiva */
+    --chocolate-900: #122b2a;
+    --chocolate-800: #1d3d3c;
+    --chocolate-700: #28504d;
+    --chocolate-600: #707956;
+    --chocolate-500: #736455;
 
-    --background: #faf7f2;
-    --foreground: #22201e;
+    --gold-600: #80611f;
+    --gold-500: #c7a03a;
+    --gold-400: #d9b85f;
+    --gold-200: #f6eccf;
+    --gold-100: #fcf9f0;
+    --gold-50: #fcf9f0;
+
+    --nude-50: #fcf5eb;
+    --nude-100: #eee8dd;
+    --nude-200: #d8d0bd;
+    --nude-300: #d3d0b5;
+
+    --charcoal-900: #122b2a;
+    --charcoal-800: #1d3d3c;
+    --charcoal-700: #333d3b;
+    --charcoal-600: #736455;
+
+    --background: #fcf5eb;
+    --foreground: #1d3d3c;
   }
 }
 
-body {
+body, html {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif !important;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Tipografia moderna geométrica estilo Gilroy para títulos de destaque */
-.font-editorial {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  letter-spacing: -0.025em;
+/* Tipografia Oficial da Marca */
+.font-sans {
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif !important;
 }
 
-/* Glassmorphism sutil para estética premium */
+.font-editorial {
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.font-gwendolyn,
+.font-gwendolyn * {
+  font-family: "Gwendolyn", cursive !important;
+  font-style: normal;
+}
+
+/* Glassmorphism acolhedor creme */
 .glass-luxury {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(252, 245, 235, 0.88);
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(229, 212, 195, 0.7);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(216, 208, 189, 0.8);
 }
 
 .glass-dark-luxury {
-  background: rgba(45, 25, 20, 0.95);
+  background: rgba(29, 61, 60, 0.95);
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(197, 155, 39, 0.25);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(199, 160, 58, 0.3);
 }
 
-/* Ouro metálico suave para botões e acentos */
+/* Gradientes da Marca */
+.brand-green-gradient {
+  background: linear-gradient(135deg, #1d3d3c 0%, #28504d 60%, #122b2a 100%);
+}
+
 .gold-gradient {
-  background: linear-gradient(135deg, #dbae3b 0%, #c59b27 50%, #9e7515 100%);
+  background: linear-gradient(135deg, #d9b85f 0%, #c7a03a 50%, #80611f 100%);
 }
 
 .gold-gradient-subtle {
-  background: linear-gradient(135deg, #fdfaf3 0%, #fbf3e0 100%);
+  background: linear-gradient(135deg, #fcf9f0 0%, #f6eccf 100%);
 }
 
 .chocolate-gradient {
-  background: linear-gradient(135deg, #2d1914 0%, #44271f 60%, #1a0f0c 100%);
+  background: linear-gradient(135deg, #1d3d3c 0%, #28504d 60%, #122b2a 100%);
+}
+
+/* Patterns Oficiais da Identidade Visual (arquivos otimizados com URLs seguras e alta nitidez) */
+.bg-pattern-gold-green {
+  background-image: url('/brand/Patterns/pattern-gold-green.png');
+  background-repeat: repeat;
+  background-size: 320px auto;
+}
+
+.bg-pattern-gold-cream {
+  background-image: url('/brand/Patterns/pattern-gold-cream.png');
+  background-repeat: repeat;
+  background-size: 320px auto;
+}
+
+.bg-pattern-arches-olive {
+  background-image: url('/brand/Patterns/pattern-arches-olive.png');
+  background-repeat: repeat;
+  background-size: 320px auto;
+}
+
+/* Faixas divisoras com patterns entre seções */
+.pattern-divider-gold-green {
+  background-image: url('/brand/Patterns/pattern-gold-green.png');
+  background-repeat: repeat-x;
+  background-size: 240px auto;
+}
+
+.pattern-divider-gold-cream {
+  background-image: url('/brand/Patterns/pattern-gold-cream.png');
+  background-repeat: repeat-x;
+  background-size: 240px auto;
+}
+
+.pattern-divider-arches-olive {
+  background-image: url('/brand/Patterns/pattern-arches-olive.png');
+  background-repeat: repeat-x;
+  background-size: 240px auto;
+}
+
+
+/* =============================================
+   ANIMAÇÕES E REVEAL DO SITE DA CLIENTE
+   ============================================= */
+
+/* --- Keyframes --- */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-8px) rotate(0.5deg); }
+  66%       { transform: translateY(-4px) rotate(-0.5deg); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-12px); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+@keyframes shimmerBorder {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes drawLine {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+@keyframes blobPulse {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25%       { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50%       { border-radius: 50% 60% 30% 60% / 30% 70% 60% 40%; }
+  75%       { border-radius: 60% 40% 60% 30% / 70% 30% 40% 60%; }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Classes de Animação --- */
+.animate-fade-up {
+  animation: fadeUp 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease both;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: floatSlow 8s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-draw-line {
+  transform-origin: top center;
+  animation: drawLine 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-blob-pulse {
+  animation: blobPulse 12s ease-in-out infinite;
+}
+
+/* --- Delays de Animação --- */
+.animation-delay-100  { animation-delay: 100ms; }
+.animation-delay-200  { animation-delay: 200ms; }
+.animation-delay-300  { animation-delay: 300ms; }
+.animation-delay-400  { animation-delay: 400ms; }
+.animation-delay-500  { animation-delay: 500ms; }
+.animation-delay-600  { animation-delay: 600ms; }
+.animation-delay-700  { animation-delay: 700ms; }
+.animation-delay-800  { animation-delay: 800ms; }
+.animation-delay-1000 { animation-delay: 1000ms; }
+.animation-delay-1200 { animation-delay: 1200ms; }
+
+/* --- Texto Shimmer Dourado --- */
+.text-shimmer-gold {
+  background: linear-gradient(
+    90deg,
+    #80611f 0%,
+    #c7a03a 30%,
+    #f5e09a 50%,
+    #c7a03a 70%,
+    #80611f 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3.5s linear infinite;
+}
+
+/* --- Borda Shimmer --- */
+.border-shimmer {
+  position: relative;
+}
+.border-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid #c7a03a;
+  animation: shimmerBorder 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* --- Clip-path Orgânico (Blob) --- */
+.clip-blob-1 {
+  clip-path: ellipse(88% 92% at 55% 48%);
+}
+.clip-blob-2 {
+  clip-path: polygon(
+    8% 0%, 92% 0%, 100% 8%,
+    100% 92%, 92% 100%, 8% 100%,
+    0% 92%, 0% 8%
+  );
+}
+
+/* --- Linha de Tempo (Timeline) --- */
+.timeline-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, #c7a03a 15%, #c7a03a 85%, transparent);
+  transform: translateX(-50%);
+}
+
+.timeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #c7a03a;
+  border: 3px solid #FCF5EB;
+  box-shadow: 0 0 0 3px rgba(199, 160, 58, 0.25), 0 2px 8px rgba(199, 160, 58, 0.3);
+}
+
+/* --- Nav Link Underline Animado --- */
+.nav-link-animated {
+  position: relative;
+}
+.nav-link-animated::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: #c7a03a;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-link-animated:hover::after {
+  width: 100%;
+}
+
+/* --- Padrão de textura pontilhada --- */
+.texture-dots {
+  background-image: radial-gradient(circle, #D8D0BD 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* --- Reduced Motion: desabilita animações decorativas --- */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-slide-left,
+  .animate-slide-right,
+  .animate-scale-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .animate-float,
+  .animate-float-slow,
+  .animate-blob-pulse {
+    animation: none;
+  }
+  .text-shimmer-gold {
+    animation: none;
+    -webkit-text-fill-color: #c7a03a;
+    background: none;
+    color: #c7a03a;
+  }
 }
 
 /* Estilos de Impressão de Alta Qualidade para a Proposta em PDF */
