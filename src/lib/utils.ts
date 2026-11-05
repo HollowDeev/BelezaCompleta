@@ -24,7 +24,10 @@ export function parseHHmmToMinutes(timeStr: string): number {
 }
 
 export function generateWhatsAppLink(phone: string, text: string): string {
-  const cleaned = phone.replace(/\D/g, "");
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("55") && cleaned.length > 11) {
+    cleaned = cleaned.slice(2);
+  }
   const encoded = encodeURIComponent(text);
   return `https://wa.me/55${cleaned}?text=${encoded}`;
 }

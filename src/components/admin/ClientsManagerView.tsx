@@ -151,129 +151,141 @@ export function ClientsManagerView({
     <div className="space-y-6">
       <RevenueRiskRadar clients={clients} appointments={appointments} />
 
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
+      <div className="bg-white/85 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-[#D8D0BD] shadow-xs space-y-6 relative overflow-hidden">
+        {/* Pattern de Arcos de Oliva sutil */}
+        <div className="absolute inset-0 bg-pattern-arches-olive opacity-[0.03] pointer-events-none" />
+
         {/* Topo do CRM */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
-        <div>
-          <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold block">
-            CRM & Relacionamento com Clientes
-          </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#2D1914] flex items-center gap-2">
-            <span>Gestão de Clientes</span>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#FAF7F2] text-[#5E372C] border border-[#E7DCCE]">
-              {totalClientsCount} cadastradas
-            </span>
-          </h2>
-        </div>
-
-        <button
-          onClick={() => setIsNewClientModalOpen(true)}
-          className="px-4 py-2 text-xs font-bold text-white chocolate-gradient rounded-xl flex items-center gap-1.5 shadow-xs hover:opacity-95 transition-all"
-        >
-          <Plus className="w-3.5 h-3.5 text-[#DBAE3B]" />
-          <span>Cadastrar Nova Cliente</span>
-        </button>
-      </div>
-
-      {/* Cartões de Indicadores Rápidos de Clientes */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#D8D0BD] pb-5 relative z-10">
           <div>
-            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-              Base de Clientes
+            <span className="text-[10px] uppercase tracking-widest text-[#80611F] font-bold block mb-1">
+              CRM &amp; Relacionamento com Clientes • Espaço da Beleza
             </span>
-            <span className="font-editorial text-2xl font-bold text-[#2D1914]">
-              {totalClientsCount}
-            </span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-white border border-[#E7DCCE] flex items-center justify-center text-[#5E372C]">
-            <Users className="w-5 h-5" />
-          </div>
-        </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[#1D3D3C] flex items-center gap-2">
+              <span>Gestão de Clientes</span>
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#FAF7F2] text-[#1D3D3C] border border-[#D8D0BD]">
+                {totalClientsCount} cadastradas
+              </span>
+            </h2>
 
-        <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-semibold text-amber-900 uppercase tracking-wider block">
-              Clientes Recorrentes (VIP)
-            </span>
-            <span className="font-editorial text-2xl font-bold text-amber-950">
-              {vipClientsCount}
-            </span>
+            {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+            <div className="relative w-36 sm:w-44 h-2.5 my-1.5 opacity-80 pointer-events-none">
+              <img
+                src="/brand/Grafismos/Linha grafismo 1.png"
+                alt=""
+                className="w-full h-full object-contain object-left"
+              />
+            </div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 flex items-center justify-center text-[#AD841D]">
-            <Sparkles className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-semibold text-rose-900 uppercase tracking-wider block">
-              Oportunidade de Reativação
-            </span>
-            <span className="font-editorial text-2xl font-bold text-rose-950">
-              {needReturnCount}
-            </span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-white border border-rose-200 flex items-center justify-center text-rose-700">
-            <HeartHandshake className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Barra de Filtros e Busca */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nome, telefone WhatsApp ou e-mail..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7DCCE] text-xs sm:text-sm text-[#2D1914] bg-[#FAF7F2]/50 focus:bg-white focus:border-[#C59B27] outline-none transition-all"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5 p-1 bg-[#FAF7F2] rounded-xl border border-[#E7DCCE] self-start sm:self-auto">
           <button
-            onClick={() => setSelectedFilter("todas")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedFilter === "todas"
-                ? "bg-[#2D1914] text-white shadow-2xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
-            }`}
+            onClick={() => setIsNewClientModalOpen(true)}
+            className="px-4 py-2 text-xs font-bold text-white brand-green-gradient border border-[#C7A03A]/40 hover:border-[#C7A03A] rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
           >
-            Todas ({clients.length})
-          </button>
-          <button
-            onClick={() => setSelectedFilter("vip")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedFilter === "vip"
-                ? "bg-[#2D1914] text-white shadow-2xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
-            }`}
-          >
-            VIPs ({vipClientsCount})
-          </button>
-          <button
-            onClick={() => setSelectedFilter("retorno")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedFilter === "retorno"
-                ? "bg-[#2D1914] text-white shadow-2xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
-            }`}
-          >
-            Reativar ({needReturnCount})
+            <Plus className="w-3.5 h-3.5 text-[#D9B85F]" />
+            <span>Cadastrar Nova Cliente</span>
           </button>
         </div>
-      </div>
+
+        {/* Cartões de Indicadores Rápidos de Clientes */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 relative z-10">
+          <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#D8D0BD] flex items-center justify-between shadow-xs">
+            <div>
+              <span className="text-[11px] font-semibold text-[#736455] uppercase tracking-wider block">
+                Base de Clientes
+              </span>
+              <span className="font-editorial text-2xl font-bold text-[#1D3D3C]">
+                {totalClientsCount}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-xl brand-green-gradient text-white flex items-center justify-center border border-[#C7A03A]/30">
+              <Users className="w-5 h-5 text-[#D9B85F]" />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#FCF9F0] border border-[#C7A03A]/60 flex items-center justify-between shadow-xs">
+            <div>
+              <span className="text-[11px] font-semibold text-[#80611F] uppercase tracking-wider block">
+                Clientes Recorrentes (VIP)
+              </span>
+              <span className="font-editorial text-2xl font-bold text-[#80611F]">
+                {vipClientsCount}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white border border-[#C7A03A]/40 flex items-center justify-center text-[#80611F] shadow-xs">
+              <Sparkles className="w-5 h-5 text-[#C7A03A]" />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-center justify-between shadow-xs">
+            <div>
+              <span className="text-[11px] font-semibold text-rose-900 uppercase tracking-wider block">
+                Oportunidade de Reativação
+              </span>
+              <span className="font-editorial text-2xl font-bold text-rose-950">
+                {needReturnCount}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white border border-rose-200 flex items-center justify-center text-rose-700 shadow-xs">
+              <HeartHandshake className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Barra de Filtros e Busca */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 relative z-10">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-[#736455] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nome, telefone WhatsApp ou e-mail..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#D8D0BD] text-xs sm:text-sm text-[#1D3D3C] bg-[#FAF7F2]/60 focus:bg-white focus:border-[#C7A03A] outline-none transition-all shadow-xs"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 p-1 bg-[#FAF7F2] rounded-xl border border-[#D8D0BD] self-start sm:self-auto shadow-xs">
+            <button
+              onClick={() => setSelectedFilter("todas")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedFilter === "todas"
+                  ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40"
+                  : "text-[#736455] hover:text-[#1D3D3C]"
+              }`}
+            >
+              Todas ({clients.length})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("vip")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedFilter === "vip"
+                  ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40"
+                  : "text-[#736455] hover:text-[#1D3D3C]"
+              }`}
+            >
+              VIPs ({vipClientsCount})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("retorno")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedFilter === "retorno"
+                  ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40"
+                  : "text-[#736455] hover:text-[#1D3D3C]"
+              }`}
+            >
+              Reativar ({needReturnCount})
+            </button>
+          </div>
+        </div>
 
       {/* Lista / Tabela de Clientes */}
       {filteredClients.length === 0 ? (
-        <div className="py-12 text-center text-xs text-stone-500 bg-[#FAF7F2] rounded-2xl border border-dashed border-[#E7DCCE]">
+        <div className="py-12 text-center text-xs text-[#736455] bg-[#FAF7F2] rounded-2xl border border-dashed border-[#D8D0BD] relative z-10">
           Nenhuma cliente encontrada com os filtros informados.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
           {filteredClients.map((client) => {
             const timeInfo = formatTimeSince(client.lastVisitAt);
             const cleanPhone = client.phone.replace(/\D/g, "");
@@ -290,20 +302,20 @@ export function ClientsManagerView({
             return (
               <div
                 key={client.id || client.phone}
-                className="p-5 rounded-2xl border border-[#E7DCCE] bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-all flex flex-col justify-between shadow-2xs space-y-4"
+                className="p-5 rounded-2xl border border-[#D8D0BD] bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-all flex flex-col justify-between shadow-xs space-y-4"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FAF7F2] to-[#E7DCCE] border border-[#C59B27]/40 flex items-center justify-center font-editorial font-bold text-[#2D1914]">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1D3D3C] to-[#244B4A] border border-[#C7A03A]/40 flex items-center justify-center font-bold text-white shadow-xs">
                         {client.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h4 className="font-bold text-base text-[#2D1914] leading-tight">
+                        <h4 className="font-bold text-base text-[#1D3D3C] leading-tight">
                           {client.name}
                         </h4>
-                        <span className="text-xs text-[#683C30] font-medium flex items-center gap-1 mt-0.5">
-                          <Phone className="w-3 h-3 text-[#AD841D]" />
+                        <span className="text-xs text-[#736455] font-medium flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3 text-[#C7A03A]" />
                           {client.phone}
                         </span>
                       </div>
@@ -317,54 +329,54 @@ export function ClientsManagerView({
                   </div>
 
                   {/* Informações de Retorno e Histórico */}
-                  <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-white border border-[#E7DCCE] text-center my-3">
+                  <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-white border border-[#D8D0BD] text-center my-3 shadow-xs">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-stone-500 block">
+                      <span className="text-[10px] uppercase font-bold text-[#736455] block">
                         Visitas
                       </span>
-                      <span className="font-bold text-xs text-[#2D1914]">
+                      <span className="font-bold text-xs text-[#1D3D3C]">
                         {clientAppointments.length || client.totalAppointments || 0}
                       </span>
                     </div>
-                    <div className="border-x border-stone-100">
-                      <span className="text-[10px] uppercase font-bold text-stone-500 block">
+                    <div className="border-x border-[#D8D0BD]/60">
+                      <span className="text-[10px] uppercase font-bold text-[#736455] block">
                         Investido
                       </span>
-                      <span className="font-bold text-xs text-[#AD841D]">
+                      <span className="font-bold text-xs text-[#80611F]">
                         {formatBRL(client.totalSpent || 0)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-stone-500 block">
+                      <span className="text-[10px] uppercase font-bold text-[#736455] block">
                         Senha Login
                       </span>
-                      <span className="text-[11px] font-mono font-semibold text-stone-600">
+                      <span className="text-[11px] font-mono font-semibold text-[#1D3D3C]">
                         {client.password || "123"}
                       </span>
                     </div>
                   </div>
 
                   {client.lastServiceTitle && (
-                    <p className="text-[11px] text-[#5E372C] leading-snug">
-                      <strong className="text-[#2D1914]">Último serviço:</strong>{" "}
+                    <p className="text-[11px] text-[#736455] leading-snug">
+                      <strong className="text-[#1D3D3C]">Último serviço:</strong>{" "}
                       {client.lastServiceTitle}
                     </p>
                   )}
 
                   {client.notes && (
-                    <p className="text-[11px] text-stone-500 line-clamp-2 mt-1 italic">
-                      "{client.notes}"
+                    <p className="text-[11px] text-[#736455] line-clamp-2 mt-1 italic">
+                      &quot;{client.notes}&quot;
                     </p>
                   )}
                 </div>
 
                 {/* Ações da Cliente */}
-                <div className="pt-3 border-t border-[#E7DCCE]/60 flex items-center justify-between gap-2">
+                <div className="pt-3 border-t border-[#D8D0BD] flex items-center justify-between gap-2">
                   <button
                     onClick={() => setSelectedClientForDetails(client)}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-[#5E372C] bg-white hover:bg-[#F3ECE1] border border-[#E7DCCE] rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
+                    className="px-3.5 py-1.5 text-xs font-semibold text-[#1D3D3C] bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
                   >
-                    <History className="w-3.5 h-3.5 text-[#AD841D]" />
+                    <History className="w-3.5 h-3.5 text-[#C7A03A]" />
                     <span>Ver Histórico Completo</span>
                   </button>
 
@@ -372,7 +384,7 @@ export function ClientsManagerView({
                     href={whatsappUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
+                    className="px-3.5 py-1.5 text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
                     title="Iniciar conversa no WhatsApp com mensagem personalizada"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
