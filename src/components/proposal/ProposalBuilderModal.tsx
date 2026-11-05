@@ -964,10 +964,13 @@ export function ProposalBuilderModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden">
-      <div className="bg-[#FAF7F2] rounded-3xl max-w-4xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-[#E7DCCE] overflow-hidden animate-scale-up">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden">
+      <div className="bg-[#FAF7F2] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-4xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col shadow-2xl border-t border-x sm:border border-[#E7DCCE] overflow-hidden animate-slide-up-sheet">
+        {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+        <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
         {/* Topo do Modal */}
-        <div className="p-5 sm:p-6 bg-white border-b border-[#E7DCCE] flex items-center justify-between shrink-0">
+        <div className="p-4 sm:p-6 bg-white border-b border-[#E7DCCE] flex items-center justify-between shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold">
@@ -2377,7 +2380,7 @@ export function ProposalBuilderModal({
         </div>
 
         {/* Rodapé de Ações Finais */}
-        <div className="p-3.5 sm:p-5 border-t border-[#E7DCCE] bg-stone-50 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+        <div className="px-4 py-3 pb-6 sm:p-5 border-t border-[#E7DCCE] bg-stone-50 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}

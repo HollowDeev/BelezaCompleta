@@ -399,10 +399,13 @@ export function ClientsManagerView({
 
       {/* MODAL 1: HISTÓRICO COMPLETO DA CLIENTE */}
       {selectedClientForDetails && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-          <div className="bg-[#FAF7F2] rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-[#E7DCCE] overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden">
+          <div className="bg-[#FAF7F2] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-3xl w-full max-h-[94vh] sm:max-h-[90vh] flex flex-col shadow-2xl border-t border-x sm:border border-[#E7DCCE] overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
             {/* Topo do Modal */}
-            <div className="p-5 sm:p-6 bg-white border-b border-[#E7DCCE] flex items-center justify-between shrink-0">
+            <div className="p-4 sm:p-6 bg-white border-b border-[#E7DCCE] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FAF7F2] to-[#E7DCCE] border border-[#C59B27]/50 flex items-center justify-center font-editorial text-lg font-bold text-[#2D1914]">
                   {selectedClientForDetails.name.charAt(0).toUpperCase()}
@@ -587,14 +590,17 @@ export function ClientsManagerView({
 
       {/* MODAL 2: CADASTRAR NOVA CLIENTE */}
       {isNewClientModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-[#E7DCCE] overflow-hidden animate-scale-up">
-            <div className="p-5 border-b border-[#E7DCCE] flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl border-t border-x sm:border border-[#E7DCCE] overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
+
+            <div className="p-4 sm:p-5 border-b border-[#E7DCCE] flex items-center justify-between shrink-0 bg-white">
               <div>
                 <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold block">
                   Novo Cadastro
                 </span>
-                <h3 className="font-editorial text-xl font-bold text-[#2D1914]">
+                <h3 className="font-editorial text-lg sm:text-xl font-bold text-[#2D1914]">
                   Cadastrar Cliente no Salão
                 </h3>
               </div>
@@ -606,7 +612,8 @@ export function ClientsManagerView({
               </button>
             </div>
 
-            <form onSubmit={handleCreateNewClient} className="p-6 space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleCreateNewClient} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs sm:text-sm no-scrollbar sm:scrollbar-thin">
               <div>
                 <label className="block text-xs font-semibold text-[#2D1914] mb-1">
                   Nome Completo da Cliente *
@@ -676,19 +683,20 @@ export function ClientsManagerView({
                   className="w-full p-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
                 />
               </div>
+              </div>
 
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E7DCCE]/60">
+              <div className="pt-3 pb-6 sm:py-4 px-5 sm:px-6 flex items-center justify-end gap-2 border-t border-[#E7DCCE]/60 shrink-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setIsNewClientModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 text-xs font-bold text-white chocolate-gradient rounded-xl shadow-sm hover:opacity-95 transition-all"
+                  className="px-5 py-2 text-xs font-bold text-white chocolate-gradient rounded-xl shadow-sm hover:opacity-95 transition-all active:scale-95 cursor-pointer"
                 >
                   {isSaving ? "Salvando..." : "Salvar Cadastro"}
                 </button>

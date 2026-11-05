@@ -344,8 +344,11 @@ export function ServiceManager({
 
       {/* Modal de Confirmação de Exclusão */}
       {deletingServiceId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 animate-scale-up text-center">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-sm w-full p-5 pb-8 sm:p-6 shadow-2xl border-t border-x sm:border border-rose-200 animate-slide-up-sheet text-center">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-3 sm:hidden shrink-0" />
+
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -366,7 +369,7 @@ export function ServiceManager({
               <button
                 type="button"
                 onClick={() => handleDeleteService(deletingServiceId)}
-                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs"
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs active:scale-95"
               >
                 Sim, Excluir
               </button>
@@ -377,46 +380,51 @@ export function ServiceManager({
 
       {/* Modal de Espelhar Questionário */}
       {targetServiceForMirror && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#D8D0BD] animate-scale-up">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-[#80611F] block mb-1">
-              Recurso de Espelhamento Inteligente
-            </span>
-            <h3 className="text-xl font-bold text-[#1D3D3C] mb-2">
-              Espelhar Questionário de Triagem
-            </h3>
-            <p className="text-xs text-[#736455] leading-relaxed mb-4">
-              Você está vinculando uma nova triagem ao serviço:{" "}
-              <strong className="text-[#1D3D3C]">{targetServiceForMirror.title}</strong>. Selecione qual questionário existente deseja usar como modelo:
-            </p>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-md w-full p-5 pb-8 sm:p-6 shadow-2xl border-t border-x sm:border border-[#D8D0BD] animate-slide-up-sheet max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-3 sm:hidden shrink-0" />
 
-            <div className="space-y-2 mb-6">
-              {triageForms.map((form) => (
-                <label
-                  key={form.id}
-                  className={`p-3 rounded-xl border block cursor-pointer text-xs transition-all ${
-                    selectedBaseFormId === form.id
-                      ? "border-[#C7A03A] bg-[#FCF9F0] text-[#1D3D3C] font-semibold"
-                      : "border-[#D8D0BD] bg-white text-[#736455]"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="baseForm"
-                    value={form.id}
-                    checked={selectedBaseFormId === form.id}
-                    onChange={(e) => setSelectedBaseFormId(e.target.value)}
-                    className="mr-2 accent-[#1D3D3C]"
-                  />
-                  <span>{form.title}</span>
-                  <span className="block text-[10px] text-[#736455]/80 font-normal mt-0.5">
-                    {form.questions.length} perguntas (curvatura, química, fotos, etc.)
-                  </span>
-                </label>
-              ))}
+            <div className="flex-1 overflow-y-auto no-scrollbar sm:scrollbar-thin">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-[#80611F] block mb-1">
+                Recurso de Espelhamento Inteligente
+              </span>
+              <h3 className="text-lg sm:text-xl font-bold text-[#1D3D3C] mb-2">
+                Espelhar Questionário de Triagem
+              </h3>
+              <p className="text-xs text-[#736455] leading-relaxed mb-4">
+                Você está vinculando uma nova triagem ao serviço:{" "}
+                <strong className="text-[#1D3D3C]">{targetServiceForMirror.title}</strong>. Selecione qual questionário existente deseja usar como modelo:
+              </p>
+
+              <div className="space-y-2 mb-6">
+                {triageForms.map((form) => (
+                  <label
+                    key={form.id}
+                    className={`p-3 rounded-xl border block cursor-pointer text-xs transition-all ${
+                      selectedBaseFormId === form.id
+                        ? "border-[#C7A03A] bg-[#FCF9F0] text-[#1D3D3C] font-semibold"
+                        : "border-[#D8D0BD] bg-white text-[#736455]"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="baseForm"
+                      value={form.id}
+                      checked={selectedBaseFormId === form.id}
+                      onChange={(e) => setSelectedBaseFormId(e.target.value)}
+                      className="mr-2 accent-[#1D3D3C]"
+                    />
+                    <span>{form.title}</span>
+                    <span className="block text-[10px] text-[#736455]/80 font-normal mt-0.5">
+                      {form.questions.length} perguntas (curvatura, química, fotos, etc.)
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-2">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#D8D0BD] shrink-0 bg-white">
               <button
                 type="button"
                 onClick={() => setTargetServiceForMirror(null)}
@@ -428,7 +436,7 @@ export function ServiceManager({
               <button
                 type="button"
                 onClick={handleMirror}
-                className="px-5 py-2 text-xs font-bold text-[#1D3D3C] gold-gradient rounded-xl shadow-md hover:opacity-95"
+                className="px-5 py-2 text-xs font-bold text-[#1D3D3C] gold-gradient rounded-xl shadow-md hover:opacity-95 active:scale-95"
               >
                 Confirmar Espelhamento
               </button>

@@ -161,26 +161,30 @@ export function NewAppointmentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-[#E7DCCE] animate-scale-up">
-        <div className="flex items-center justify-between border-b border-[#E7DCCE]/60 pb-4 mb-5">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+      <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl border-t border-x sm:border border-[#E7DCCE] animate-slide-up-sheet overflow-hidden">
+        {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+        <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
+
+        <div className="flex items-center justify-between border-b border-[#E7DCCE]/60 px-5 sm:px-8 py-3.5 sm:py-4 shrink-0 bg-white">
           <div>
             <span className="text-[10px] uppercase font-bold tracking-widest text-[#AD841D] block">
               Agendamento Direto
             </span>
-            <h3 className="text-xl font-bold text-[#2D1914]">Novo Atendimento</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-[#2D1914]">Novo Atendimento</h3>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600"
+            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="block font-semibold text-[#2D1914] mb-1">Procedimento</label>
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-4 space-y-4 text-xs no-scrollbar sm:scrollbar-thin">
+            <div>
+              <label className="block font-semibold text-[#2D1914] mb-1">Procedimento</label>
             <select
               value={selectedServiceId}
               onChange={(e) => setSelectedServiceId(e.target.value)}
@@ -351,18 +355,20 @@ export function NewAppointmentModal({
             />
           </div>
 
-          <div className="pt-4 border-t border-[#E7DCCE]/60 flex items-center justify-end space-x-2">
+          </div>
+
+          <div className="pt-3 pb-6 sm:py-4 px-5 sm:px-8 border-t border-[#E7DCCE]/60 flex items-center justify-end space-x-2 shrink-0 bg-white">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-semibold text-stone-600 hover:bg-stone-100 rounded-xl"
+              className="px-4 py-2 font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
             >
               Cancelar
             </button>
 
             <button
               type="submit"
-              className="px-6 py-2.5 font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95"
+              className="px-6 py-2.5 font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 transition-all active:scale-95"
             >
               Confirmar Agendamento
             </button>

@@ -213,26 +213,29 @@ export function RevenueRiskRadar({ clients, appointments }: RevenueRiskRadarProp
 
       {/* Modal de Disparo / Envio em Lote */}
       {showBatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-          <div className="bg-[#1A0F0C] rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-amber-500/40 overflow-hidden text-white animate-scale-up">
-            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden">
+          <div className="bg-[#1A0F0C] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-2xl w-full max-h-[92vh] sm:max-h-[85vh] flex flex-col shadow-2xl border-t border-x sm:border border-amber-500/40 overflow-hidden text-white animate-slide-up-sheet">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-amber-700/60 rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
+
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 block">
                   Campanha de Resgate Ativo
                 </span>
-                <h3 className="font-editorial text-lg sm:text-xl font-bold text-white">
+                <h3 className="font-editorial text-base sm:text-xl font-bold text-white">
                   Envio para {atRiskClients.length} Clientes em Risco
                 </h3>
               </div>
               <button
                 onClick={() => setShowBatchModal(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-stone-300"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-stone-300 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+            <div className="p-4 sm:p-5 pb-8 sm:pb-5 overflow-y-auto space-y-4 text-xs flex-1 no-scrollbar sm:scrollbar-thin">
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200">
                 💡 Clique no botão WhatsApp ao lado de cada cliente para abrir a conversa com a mensagem pré-formatada, ou copie a lista completa abaixo para colar no seu gerenciador de disparos.
               </div>

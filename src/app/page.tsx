@@ -508,66 +508,82 @@ export default function ClientHomePage() {
 
       {/* Modal Interativo de Triagem Anamnese (quando serviço exige) */}
       {isTakingTriage && activeTriageForm && selectedService && (
-        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-3xl w-full p-1 sm:p-3 shadow-2xl border border-[#C7A03A]/40 my-auto max-h-[96vh] sm:max-h-[92vh] overflow-y-auto">
-            <GamifiedTriage
-              form={activeTriageForm}
-              service={selectedService}
-              existingAppointments={appointments}
-              availableDays={availableDays}
-              onComplete={handleCompleteTriage}
-              onCancel={() => setIsTakingTriage(false)}
-            />
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-3xl w-full p-2 sm:p-4 shadow-2xl border-t border-x sm:border border-[#C7A03A]/40 max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            <div className="flex-1 overflow-y-auto no-scrollbar sm:scrollbar-thin">
+              <GamifiedTriage
+                form={activeTriageForm}
+                service={selectedService}
+                existingAppointments={appointments}
+                availableDays={availableDays}
+                onComplete={handleCompleteTriage}
+                onCancel={() => setIsTakingTriage(false)}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Modal Interativo de Seleção de Horário (Slot Picker Direto) */}
       {isPickingSlot && selectedService && (
-        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-3xl w-full p-1 sm:p-3 shadow-2xl border border-[#C7A03A]/40 my-auto max-h-[96vh] sm:max-h-[92vh] overflow-y-auto">
-            <SlotPicker
-              service={selectedService}
-              existingAppointments={appointments}
-              availableDays={availableDays}
-              onConfirmBooking={handleConfirmDirectBooking}
-              onRequestPreReservation={handlePreReservationDone}
-              onCancel={() => setIsPickingSlot(false)}
-            />
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-3xl w-full p-2 sm:p-4 shadow-2xl border-t border-x sm:border border-[#C7A03A]/40 max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            <div className="flex-1 overflow-y-auto no-scrollbar sm:scrollbar-thin">
+              <SlotPicker
+                service={selectedService}
+                existingAppointments={appointments}
+                availableDays={availableDays}
+                onConfirmBooking={handleConfirmDirectBooking}
+                onRequestPreReservation={handlePreReservationDone}
+                onCancel={() => setIsPickingSlot(false)}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Modal de Proposta PDF */}
       {viewingProposal && (
-        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-4xl w-full p-3 sm:p-8 shadow-2xl my-auto max-h-[96vh] sm:max-h-[90vh] overflow-y-auto border border-[#D8D0BD]">
-            <LuxuryProposalPDF
-              proposal={viewingProposal}
-              isClientView={true}
-              onApprove={async (propId: string) => {
-                await SupabaseDataService.approveProposal(propId);
-                showToast("Proposta aprovada com sucesso! Seu horário foi confirmado na agenda.", "success");
-                setViewingProposal(null);
-              }}
-              onBack={() => setViewingProposal(null)}
-            />
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-4xl w-full p-3 sm:p-8 shadow-2xl max-h-[94vh] sm:max-h-[90vh] flex flex-col overflow-hidden border-t border-x sm:border border-[#D8D0BD] animate-slide-up-sheet">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            <div className="flex-1 overflow-y-auto no-scrollbar sm:scrollbar-thin">
+              <LuxuryProposalPDF
+                proposal={viewingProposal}
+                isClientView={true}
+                onApprove={async (propId: string) => {
+                  await SupabaseDataService.approveProposal(propId);
+                  showToast("Proposta aprovada com sucesso! Seu horário foi confirmado na agenda.", "success");
+                  setViewingProposal(null);
+                }}
+                onBack={() => setViewingProposal(null)}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Modal de Login / Registro da Cliente */}
       {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-[#D8D0BD] relative animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-md w-full p-5 sm:p-8 shadow-2xl border-t border-x sm:border border-[#D8D0BD] relative max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-3 sm:hidden shrink-0" />
+
             <button
               onClick={() => setIsAuthModalOpen(false)}
-              className="p-1 rounded-full text-stone-400 hover:text-stone-700 absolute right-4 top-4 transition-colors"
+              className="p-1 rounded-full text-stone-400 hover:text-stone-700 absolute right-4 top-4 transition-colors z-10"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="text-center mb-6">
+            <div className="flex-1 overflow-y-auto no-scrollbar sm:scrollbar-thin pb-4 sm:pb-0">
+              <div className="text-center mb-6">
               <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center mx-auto mb-3 shadow-md border border-[#C7A03A]/40 font-editorial font-bold text-lg">
                 GR
               </div>
@@ -676,11 +692,12 @@ export default function ClientHomePage() {
               <button
                 type="submit"
                 disabled={isAuthLoading}
-                className="w-full py-3.5 rounded-xl text-white bg-[#1D3D3C] hover:bg-[#28504D] active:bg-[#122B2A] font-bold text-xs uppercase tracking-wider shadow-md transition-all disabled:opacity-50 mt-2 border border-[#C7A03A]/40"
+                className="w-full py-3.5 rounded-xl text-white bg-[#1D3D3C] hover:bg-[#28504D] active:bg-[#122B2A] font-bold text-xs uppercase tracking-wider shadow-md transition-all disabled:opacity-50 mt-2 border border-[#C7A03A]/40 active:scale-95 cursor-pointer"
               >
                 {isAuthLoading ? "Conectando..." : authMode === "login" ? "Entrar na Minha Conta" : "Criar Meu Cadastro"}
               </button>
             </form>
+            </div>
           </div>
         </div>
       )}

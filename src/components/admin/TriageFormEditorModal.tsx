@@ -244,19 +244,22 @@ export function TriageFormEditorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-[#E7DCCE] my-8 animate-fade-in text-[#2D1914] max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+      <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-4xl w-full shadow-2xl border-t border-x sm:border border-[#E7DCCE] animate-slide-up-sheet text-[#2D1914] max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+        <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
+
         {/* Topo do Modal */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#E7DCCE] shrink-0">
+        <div className="flex items-center justify-between px-5 sm:px-7 py-3.5 sm:py-4 border-b border-[#E7DCCE] shrink-0 bg-white">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl chocolate-gradient flex items-center justify-center text-[#DBAE3B] shadow-sm">
+            <div className="w-10 h-10 rounded-2xl chocolate-gradient flex items-center justify-center text-[#DBAE3B] shadow-sm shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-widest text-[#AD841D]">
-                Anamnese & Diagnóstico Capilar
+                Anamnese &amp; Diagnóstico Capilar
               </span>
-              <h2 className="text-lg sm:text-xl font-bold">
+              <h2 className="text-base sm:text-xl font-bold">
                 {isEditing ? "Editar Modelo de Triagem" : "Criar Novo Modelo de Triagem"}
               </h2>
             </div>
@@ -270,16 +273,17 @@ export function TriageFormEditorModal({
           </button>
         </div>
 
-        {/* Mensagem de Erro */}
-        {errorMsg && (
-          <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
         {/* Formulário com Scroll Interno */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 py-4 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Mensagem de Erro */}
+          {errorMsg && (
+            <div className="mx-5 sm:mx-7 mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2 shrink-0">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto px-5 sm:px-7 py-4 space-y-6 no-scrollbar sm:scrollbar-thin">
           {/* 1. DADOS GERAIS DO MODELO */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#AD841D] flex items-center gap-1.5">
@@ -619,9 +623,10 @@ export function TriageFormEditorModal({
               })}
             </div>
           </div>
+          </div>
 
           {/* Rodapé com Botões de Ação */}
-          <div className="pt-5 border-t border-[#E7DCCE] flex items-center justify-end space-x-3 shrink-0">
+          <div className="pt-3 pb-6 sm:py-4 px-5 sm:px-7 border-t border-[#E7DCCE] flex items-center justify-end space-x-3 shrink-0 bg-white">
             <button
               type="button"
               onClick={onClose}
@@ -634,7 +639,7 @@ export function TriageFormEditorModal({
             <button
               type="submit"
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#2D1914] gold-gradient shadow-md hover:opacity-95 transition-all flex items-center space-x-2 disabled:opacity-50"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#2D1914] gold-gradient shadow-md hover:opacity-95 transition-all flex items-center space-x-2 disabled:opacity-50 active:scale-95 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>

@@ -56,10 +56,13 @@ export function TutorialHelpModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto bg-black/60 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-[#E7DCCE] overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden bg-black/60 backdrop-blur-xs">
+      <div className="bg-white w-full max-w-4xl rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl shadow-2xl border-t border-x sm:border border-[#E7DCCE] overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh] animate-slide-up-sheet">
+        {/* Puxador Visual Mobile */}
+        <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
         {/* Header da Central */}
-        <div className="bg-[#2D1914] text-white p-6 sm:p-8 relative overflow-hidden shrink-0">
+        <div className="bg-[#2D1914] text-white p-5 sm:p-8 relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-64 h-64 bg-radial from-[#C59B27]/20 to-transparent pointer-events-none rounded-full blur-2xl" />
 
           <div className="relative z-10 flex items-start justify-between">

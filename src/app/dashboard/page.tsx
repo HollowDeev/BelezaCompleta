@@ -838,8 +838,11 @@ export default function DashboardPage() {
 
       {/* Modal Visualizador de Proposta para a Gleicy (Contido na Altura do Monitor) */}
       {viewingProposalModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-          <div className="bg-[#FAF7F2] rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-[#D8D0BD] overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden">
+          <div className="bg-[#FAF7F2] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-4xl w-full max-h-[94vh] sm:max-h-[90vh] flex flex-col shadow-2xl border-t border-x sm:border border-[#D8D0BD] overflow-hidden animate-slide-up-sheet">
+            {/* Puxador Visual Mobile (Bottom Sheet Handle) */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
             <div className="p-4 sm:p-5 brand-green-gradient text-white border-b border-[#C7A03A]/40 flex flex-wrap items-center justify-between gap-3 shrink-0 relative overflow-hidden">
               {/* Pattern Gold Green sutil */}
               <div className="absolute inset-0 bg-pattern-gold-green opacity-10 pointer-events-none" />

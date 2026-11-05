@@ -539,8 +539,11 @@ export function PreReservationQueue({
 
       {/* Modal de Confirmação de Recusa */}
       {decliningItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#D8D0BD] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-scale-up text-[#1D3D3C]">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white border-t border-x sm:border border-[#D8D0BD] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-md w-full p-5 pb-8 sm:p-6 space-y-4 shadow-2xl animate-slide-up-sheet text-[#1D3D3C]">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-2 sm:hidden shrink-0" />
+
             <div className="flex items-center justify-between pb-3 border-b border-[#D8D0BD]">
               <h4 className="text-base font-bold text-[#1D3D3C] flex items-center gap-2">
                 <XCircle className="w-5 h-5 text-red-500" />
@@ -582,7 +585,7 @@ export function PreReservationQueue({
               <button
                 onClick={handleConfirmDecline}
                 disabled={isProcessingAction}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md active:scale-95"
               >
                 Confirmar Recusa
               </button>
