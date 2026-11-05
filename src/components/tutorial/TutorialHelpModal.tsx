@@ -112,12 +112,12 @@ export function TutorialHelpModal({
         </div>
 
         {/* Barra de Navegação Interna & Busca */}
-        <div className="bg-[#FAF7F2] border-b border-[#E7DCCE] px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div className="bg-[#FAF7F2] border-b border-[#E7DCCE] px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           {/* Tabs */}
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 w-full sm:w-auto shrink-0">
             <button
               onClick={() => setActiveTab("modulos")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
                 activeTab === "modulos"
                   ? "bg-[#2D1914] text-white shadow-xs"
                   : "text-[#5E372C] hover:bg-stone-200/50"
@@ -129,7 +129,7 @@ export function TutorialHelpModal({
 
             <button
               onClick={() => setActiveTab("atalhos")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
                 activeTab === "atalhos"
                   ? "bg-[#2D1914] text-white shadow-xs"
                   : "text-[#5E372C] hover:bg-stone-200/50"
@@ -141,7 +141,7 @@ export function TutorialHelpModal({
 
             <button
               onClick={() => setActiveTab("faq")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
                 activeTab === "faq"
                   ? "bg-[#2D1914] text-white shadow-xs"
                   : "text-[#5E372C] hover:bg-stone-200/50"
@@ -153,7 +153,7 @@ export function TutorialHelpModal({
           </div>
 
           {/* Campo de Busca Rápida */}
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-64 shrink-0">
             <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -166,12 +166,12 @@ export function TutorialHelpModal({
         </div>
 
         {/* Conteúdo da Tab */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {activeTab === "modulos" && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              {/* Menu Lateral de Módulos */}
-              <div className="md:col-span-4 space-y-2 border-r border-[#E7DCCE]/60 pr-4">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D] block mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6">
+              {/* Menu Lateral de Módulos (Carrossel Horizontal no Mobile, Barra Lateral no Desktop) */}
+              <div className="md:col-span-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible no-scrollbar pb-2 md:pb-0 border-b md:border-b-0 md:border-r border-[#E7DCCE]/60 md:pr-4 shrink-0">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D] hidden md:block mb-1">
                   Tópicos do Sistema ({filteredGuides.length})
                 </span>
 
@@ -181,9 +181,9 @@ export function TutorialHelpModal({
                     <button
                       key={guide.id}
                       onClick={() => setSelectedModuleId(guide.id)}
-                      className={`w-full text-left p-3 rounded-2xl transition-all flex items-center justify-between border ${
+                      className={`min-w-[190px] sm:min-w-[220px] md:min-w-0 md:w-full text-left p-3 rounded-2xl transition-all flex items-center justify-between border shrink-0 md:shrink ${
                         isSelected
-                          ? "bg-[#2D1914] text-white border-[#2D1914] shadow-xs"
+                          ? "bg-[#2D1914] text-white border-[#2D1914] shadow-xs ring-1 ring-[#DBAE3B]/40"
                           : "bg-white text-[#44271F] border-[#E7DCCE]/80 hover:bg-[#FAF7F2]"
                       }`}
                     >
@@ -200,7 +200,7 @@ export function TutorialHelpModal({
                         </span>
                       </div>
                       <ChevronRight
-                        className={`w-4 h-4 shrink-0 ${
+                        className={`w-4 h-4 shrink-0 hidden sm:block ${
                           isSelected ? "text-[#DBAE3B]" : "text-stone-400"
                         }`}
                       />
@@ -210,7 +210,7 @@ export function TutorialHelpModal({
               </div>
 
               {/* Detalhes do Módulo Selecionado */}
-              <div className="md:col-span-8 space-y-6 pl-2">
+              <div className="md:col-span-8 space-y-6 md:pl-2">
                 <div>
                   <h3 className="font-editorial text-2xl font-bold text-[#2D1914] mb-1">
                     {activeModule.title}
@@ -427,15 +427,15 @@ export function TutorialHelpModal({
         </div>
 
         {/* Rodapé da Central */}
-        <div className="bg-[#FAF7F2] border-t border-[#E7DCCE] px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-[#FAF7F2] border-t border-[#E7DCCE] px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <div className="flex items-center space-x-2 text-xs text-stone-500">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Sistema 100% atualizado e conectado ao Supabase</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="text-center sm:text-left">Sistema 100% atualizado e conectado ao Supabase</span>
           </div>
 
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-[#2D1914] bg-white border border-[#E7DCCE] hover:bg-[#F3ECE1] transition-all shadow-2xs"
+            className="w-full sm:w-auto px-5 py-2.5 sm:py-2 rounded-xl text-xs font-bold text-[#2D1914] bg-white border border-[#E7DCCE] hover:bg-[#F3ECE1] transition-all shadow-2xs text-center"
           >
             Entendido, fechar manual
           </button>

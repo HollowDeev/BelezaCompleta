@@ -46,12 +46,29 @@ export function InteractiveTutorialTour({
     height: typeof window !== "undefined" ? window.innerHeight : 800,
   });
 
+  // Função pura para resolver o elemento alvo com suporte inteligente a mobile
+  const resolveTargetElement = useCallback((selector: string): Element | null => {
+    let el = document.querySelector(selector);
+    // No mobile (< 768px), se for um item da sidebar e a sidebar estiver fechada ou fora da tela
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      if (selector.includes("sidebar-")) {
+        if (!el || el.getBoundingClientRect().left < 0 || el.getBoundingClientRect().width === 0) {
+          const mobileToggle = document.querySelector('[data-tutorial="mobile-menu-toggle"]');
+          if (mobileToggle) return mobileToggle;
+        }
+      }
+    }
+    return el;
+  }, []);
+
   // Função pura para obter retângulo nas coordenadas da viewport
   const getElementViewportRect = useCallback((selector: string): TargetRect | null => {
-    const el = document.querySelector(selector);
+    const el = resolveTargetElement(selector);
     if (!el) return null;
 
     const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
     const padding = 8;
     return {
       top: Math.round(rect.top - padding),
@@ -59,7 +76,7 @@ export function InteractiveTutorialTour({
       width: Math.round(rect.width + padding * 2),
       height: Math.round(rect.height + padding * 2),
     };
-  }, []);
+  }, [resolveTargetElement]);
 
   // Atualiza posição do elemento ativo
   const updateTargetPosition = useCallback(() => {
@@ -93,7 +110,7 @@ export function InteractiveTutorialTour({
     }
 
     const startTrackingTarget = () => {
-      const el = document.querySelector(currentStep.targetSelector!);
+      const el = resolveTargetElement(currentStep.targetSelector!);
       if (!el) {
         pollAttempts++;
         if (pollAttempts < maxPollAttempts && !isCancelled) {
@@ -110,16 +127,31 @@ export function InteractiveTutorialTour({
         setTargetRect(initialRect);
       }
 
-      // Verifica se o elemento está razoavelmente visível na tela
+      const isMobile = window.innerWidth < 768;
       const rawRect = el.getBoundingClientRect();
-      const isComfortablyVisible =
-        rawRect.top >= 90 &&
-        rawRect.bottom <= window.innerHeight - 90 &&
-        rawRect.left >= 0 &&
-        rawRect.right <= window.innerWidth;
 
-      if (!isComfortablyVisible) {
-        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      // No mobile, se o elemento estiver fora do campo visível ou se for um botão fixo no topo
+      if (isMobile) {
+        const isComfortablyVisible =
+          rawRect.top >= 55 &&
+          rawRect.bottom <= window.innerHeight - 55 &&
+          rawRect.left >= 0 &&
+          rawRect.right <= window.innerWidth;
+
+        // Se não for elemento fixo/sticky no topo e não estiver visível, scrolla suavemente
+        if (!isComfortablyVisible && !el.closest(".sticky") && !el.closest(".fixed")) {
+          el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        }
+      } else {
+        const isComfortablyVisible =
+          rawRect.top >= 90 &&
+          rawRect.bottom <= window.innerHeight - 90 &&
+          rawRect.left >= 0 &&
+          rawRect.right <= window.innerWidth;
+
+        if (!isComfortablyVisible) {
+          el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        }
       }
 
       // Rastreia coordenadas com RAF durante a animação de scroll (650ms)
@@ -145,7 +177,7 @@ export function InteractiveTutorialTour({
       if (pollInterval) clearTimeout(pollInterval);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [isOpen, currentStep, onSelectTab, getElementViewportRect]);
+  }, [isOpen, currentStep, onSelectTab, resolveTargetElement, getElementViewportRect]);
 
   // Listener contínuo de resize e scroll nativo
   useEffect(() => {
@@ -196,83 +228,118 @@ export function InteractiveTutorialTour({
   const isLastStep = currentStepIndex === steps.length - 1;
   const progressPercent = Math.round(((currentStepIndex + 1) / steps.length) * 100);
 
+  const isMobile = viewportDims.width < 768;
+
   // Determina se deve ficar centralizado
-  const isCentered = !targetRect || currentStep.position === "center";
+  const isCentered =
+    !targetRect ||
+    currentStep.position === "center" ||
+    targetRect.width <= 0 ||
+    targetRect.height <= 0;
 
   // Cálculo seguro e restrito da posição do Card na Viewport
   let cardStyle: React.CSSProperties = {};
 
   if (!isCentered && targetRect) {
-    const spacing = 16;
-    const vw = viewportDims.width;
-    const vh = viewportDims.height;
+    if (isMobile) {
+      // Mobile: Posicionamento Inteligente (Top Dock ou Bottom Dock)
+      // Se o elemento estiver na metade superior da tela, o card acopla na base inferior
+      // Se o elemento estiver na metade inferior da tela, o card acopla no topo
+      const targetCenterY = targetRect.top + targetRect.height / 2;
+      const isTargetInTopHalf = targetCenterY < viewportDims.height * 0.52;
 
-    // Dimensões do card (calculadas ou estimadas com margem)
-    const cardWidth = cardRef.current?.offsetWidth || Math.min(420, vw - 32);
-    const cardHeight = cardRef.current?.offsetHeight || 330;
+      if (isTargetInTopHalf) {
+        cardStyle = {
+          position: "fixed",
+          bottom: "16px",
+          left: "12px",
+          right: "12px",
+          maxWidth: "460px",
+          margin: "0 auto",
+        };
+      } else {
+        cardStyle = {
+          position: "fixed",
+          top: "16px",
+          left: "12px",
+          right: "12px",
+          maxWidth: "460px",
+          margin: "0 auto",
+        };
+      }
+    } else {
+      // Desktop: posicionamento contextual tradicional relativo ao elemento
+      const spacing = 16;
+      const vw = viewportDims.width;
+      const vh = viewportDims.height;
 
-    // Limites seguros da tela (evita encobrir barra superior e evita vazar no rodapé)
-    const minTop = 75; // altura do cabeçalho superior do dashboard
-    const maxTop = Math.max(minTop, vh - cardHeight - 16);
-    const minLeft = 16;
-    const maxLeft = Math.max(minLeft, vw - cardWidth - 16);
+      // Dimensões do card (calculadas ou estimadas com margem)
+      const cardWidth = cardRef.current?.offsetWidth || Math.min(420, vw - 32);
+      const cardHeight = cardRef.current?.offsetHeight || 330;
 
-    let desiredPos = currentStep.position || "bottom";
-    let computedTop = minTop;
-    let computedLeft = minLeft;
+      // Limites seguros da tela (evita encobrir barra superior e evita vazar no rodapé)
+      const minTop = 75; // altura do cabeçalho superior do dashboard
+      const maxTop = Math.max(minTop, vh - cardHeight - 16);
+      const minLeft = 16;
+      const maxLeft = Math.max(minLeft, vw - cardWidth - 16);
 
-    if (desiredPos === "bottom") {
-      let idealTop = targetRect.top + targetRect.height + spacing;
-      // Se vazar embaixo, tenta colocar em cima
-      if (idealTop + cardHeight > vh - 16) {
-        if (targetRect.top - cardHeight - spacing >= minTop) {
-          idealTop = targetRect.top - cardHeight - spacing;
+      let desiredPos = currentStep.position || "bottom";
+      let computedTop = minTop;
+      let computedLeft = minLeft;
+
+      if (desiredPos === "bottom") {
+        let idealTop = targetRect.top + targetRect.height + spacing;
+        // Se vazar embaixo, tenta colocar em cima
+        if (idealTop + cardHeight > vh - 16) {
+          if (targetRect.top - cardHeight - spacing >= minTop) {
+            idealTop = targetRect.top - cardHeight - spacing;
+          }
         }
-      }
-      computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
-      computedLeft = Math.max(minLeft, Math.min(targetRect.left, maxLeft));
-    } else if (desiredPos === "top") {
-      let idealTop = targetRect.top - cardHeight - spacing;
-      // Se não couber em cima, coloca embaixo
-      if (idealTop < minTop) {
-        idealTop = targetRect.top + targetRect.height + spacing;
-      }
-      computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
-      computedLeft = Math.max(minLeft, Math.min(targetRect.left, maxLeft));
-    } else if (desiredPos === "right") {
-      let idealLeft = targetRect.left + targetRect.width + spacing;
-      // Se vazar à direita, posiciona à esquerda
-      if (idealLeft + cardWidth > vw - 16) {
-        if (targetRect.left - cardWidth - spacing >= minLeft) {
-          idealLeft = targetRect.left - cardWidth - spacing;
+        computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
+        computedLeft = Math.max(minLeft, Math.min(targetRect.left, maxLeft));
+      } else if (desiredPos === "top") {
+        let idealTop = targetRect.top - cardHeight - spacing;
+        // Se não couber em cima, coloca embaixo
+        if (idealTop < minTop) {
+          idealTop = targetRect.top + targetRect.height + spacing;
         }
+        computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
+        computedLeft = Math.max(minLeft, Math.min(targetRect.left, maxLeft));
+      } else if (desiredPos === "right") {
+        let idealLeft = targetRect.left + targetRect.width + spacing;
+        // Se vazar à direita, posiciona à esquerda
+        if (idealLeft + cardWidth > vw - 16) {
+          if (targetRect.left - cardWidth - spacing >= minLeft) {
+            idealLeft = targetRect.left - cardWidth - spacing;
+          }
+        }
+        computedLeft = Math.max(minLeft, Math.min(idealLeft, maxLeft));
+        // Alinha verticalmente com o centro do alvo, estritamente contido na tela
+        const idealTop = targetRect.top + targetRect.height / 2 - cardHeight / 2;
+        computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
+      } else if (desiredPos === "left") {
+        let idealLeft = targetRect.left - cardWidth - spacing;
+        // Se não couber à esquerda, posiciona à direita
+        if (idealLeft < minLeft) {
+          idealLeft = targetRect.left + targetRect.width + spacing;
+        }
+        computedLeft = Math.max(minLeft, Math.min(idealLeft, maxLeft));
+        const idealTop = targetRect.top + targetRect.height / 2 - cardHeight / 2;
+        computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
       }
-      computedLeft = Math.max(minLeft, Math.min(idealLeft, maxLeft));
-      // Alinha verticalmente com o centro do alvo, estritamente contido na tela
-      const idealTop = targetRect.top + targetRect.height / 2 - cardHeight / 2;
-      computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
-    } else if (desiredPos === "left") {
-      let idealLeft = targetRect.left - cardWidth - spacing;
-      // Se não couber à esquerda, posiciona à direita
-      if (idealLeft < minLeft) {
-        idealLeft = targetRect.left + targetRect.width + spacing;
-      }
-      computedLeft = Math.max(minLeft, Math.min(idealLeft, maxLeft));
-      const idealTop = targetRect.top + targetRect.height / 2 - cardHeight / 2;
-      computedTop = Math.max(minTop, Math.min(idealTop, maxTop));
+
+      cardStyle = {
+        position: "fixed",
+        top: computedTop,
+        left: computedLeft,
+      };
     }
-
-    cardStyle = {
-      position: "fixed",
-      top: computedTop,
-      left: computedLeft,
-    };
   }
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-auto overflow-hidden">
       {/* 1. Backdrop com Holofote Recortado */}
-      {targetRect && !isCentered ? (
+      {targetRect && !isCentered && targetRect.width > 0 && targetRect.height > 0 ? (
         <div
           className="fixed rounded-2xl pointer-events-none transition-[box-shadow,border] duration-150 ease-out border-2 border-[#C59B27] shadow-[0_0_0_9999px_rgba(28,16,12,0.82),0_0_24px_rgba(197,155,39,0.55)] animate-pulse"
           style={{
@@ -292,21 +359,23 @@ export function InteractiveTutorialTour({
         className={`fixed z-50 transition-all duration-200 ease-out ${
           isCentered
             ? "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] sm:w-[480px]"
+            : isMobile
+            ? "w-[calc(100%-24px)] max-w-md mx-auto"
             : "w-[92%] sm:w-[420px]"
         }`}
         style={isCentered ? undefined : cardStyle}
       >
-        <div className="bg-white rounded-3xl shadow-2xl border border-[#E7DCCE] overflow-hidden text-[#2D1914] flex flex-col max-h-[calc(100vh-100px)]">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-[#E7DCCE] overflow-hidden text-[#2D1914] flex flex-col max-h-[50vh] sm:max-h-[calc(100vh-100px)] animate-slide-up-sheet">
           {/* Topo do Card: Progresso e Fechar */}
-          <div className="bg-[#FAF7F2] border-b border-[#E7DCCE]/60 px-5 py-3.5 flex items-center justify-between shrink-0">
+          <div className="bg-[#FAF7F2] border-b border-[#E7DCCE]/60 px-4 sm:px-5 py-2.5 sm:py-3.5 flex items-center justify-between shrink-0">
             <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#C59B27] animate-ping" />
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D]">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#C59B27] animate-ping shrink-0" />
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D] truncate">
                 {currentStep.categoryLabel}
               </span>
               <span className="text-[11px] font-semibold text-stone-400">•</span>
-              <span className="text-[11px] font-bold text-stone-500">
-                Passo {currentStepIndex + 1} de {steps.length}
+              <span className="text-[11px] font-bold text-stone-500 shrink-0">
+                Passo {currentStepIndex + 1}/{steps.length}
               </span>
             </div>
 
@@ -328,9 +397,16 @@ export function InteractiveTutorialTour({
           </div>
 
           {/* Conteúdo Principal do Passo com scroll se a tela for muito baixa */}
-          <div className="p-5 sm:p-6 space-y-4 overflow-y-auto min-h-0">
-            <div className="space-y-1.5">
-              <h3 className="font-editorial text-xl sm:text-2xl font-bold text-[#2D1914] leading-snug">
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto min-h-0 no-scrollbar sm:scrollbar-thin">
+            {/* Aviso inteligente de acesso no mobile para itens do menu */}
+            {isMobile && currentStep.targetSelector?.includes("sidebar-") && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#1D3D3C]/10 text-[#1D3D3C] text-[11px] font-bold border border-[#1D3D3C]/20 w-fit">
+                <span>📱 No celular: Acesso pelo Menu ☰ (topo à esquerda)</span>
+              </div>
+            )}
+
+            <div className="space-y-1 sm:space-y-1.5">
+              <h3 className="font-editorial text-lg sm:text-2xl font-bold text-[#2D1914] leading-snug">
                 {currentStep.title}
               </h3>
               <p className="text-xs sm:text-sm text-stone-600 leading-relaxed whitespace-pre-line">
@@ -340,7 +416,7 @@ export function InteractiveTutorialTour({
 
             {/* Dica de Ouro Estratégica (se houver) */}
             {currentStep.goldenTip && (
-              <div className="p-3.5 rounded-2xl bg-[#FFF9E6] border border-[#F0DC9B] flex items-start space-x-3 text-xs text-[#6B5112]">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-[#FFF9E6] border border-[#F0DC9B] flex items-start space-x-2.5 sm:space-x-3 text-xs text-[#6B5112]">
                 <Lightbulb className="w-4 h-4 text-[#C59B27] shrink-0 mt-0.5" />
                 <div className="leading-snug">
                   <strong className="block text-[#473406] mb-0.5">Dica de Ouro:</strong>

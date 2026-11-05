@@ -515,9 +515,9 @@ export default function DashboardPage() {
 
           <div data-tutorial="header-actions" className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Status do Banco Supabase */}
-            <div data-tutorial="header-status" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-[11px] font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Sincronizado</span>
+            <div data-tutorial="header-status" className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-[11px] font-medium shrink-0" title="Banco de dados Supabase em tempo real">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">Sincronizado</span>
             </div>
 
             {/* Botão de Tutorial & Guia do Sistema */}

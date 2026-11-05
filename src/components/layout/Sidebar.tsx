@@ -168,6 +168,7 @@ export function Sidebar({
       {/* Botão de Menu Flutuante para Mobile */}
       <div className="md:hidden fixed top-3 left-3 z-50">
         <button
+          data-tutorial="mobile-menu-toggle"
           onClick={() => setIsMobileOpen(!isMobileOpen)}
           className="w-11 h-11 rounded-2xl bg-[#1D3D3C] text-white shadow-lg border border-[#C7A03A]/40 flex items-center justify-center active:scale-95 transition-transform"
           aria-label={isMobileOpen ? "Fechar Menu" : "Abrir Menu"}
