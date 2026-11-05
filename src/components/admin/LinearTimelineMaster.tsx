@@ -80,9 +80,9 @@ export function LinearTimelineMaster({
     timeMarkers.push(m);
   }
 
-  // Agendamentos filtrados para o dia selecionado
+  // Agendamentos filtrados para o dia selecionado (apenas agendamentos reais/confirmados)
   const dayAppointments = appointments.filter(
-    (a) => a.date === selectedDate && a.status !== "cancelled"
+    (a) => a.date === selectedDate && a.status !== "cancelled" && a.status !== "pending_proposal"
   );
 
   // Filtra agendamentos elegíveis: ativos agora OU que iniciam em até 5 minutos
@@ -282,20 +282,31 @@ export function LinearTimelineMaster({
   const movingTrackTransform = movingTrackStyle.transform;
 
   return (
-    <div className="bg-white rounded-3xl p-5 sm:p-7 border border-[#E7DCCE] shadow-xs space-y-6">
+    <div className="bg-white/80 backdrop-blur-md rounded-3xl p-5 sm:p-7 border border-[#D8D0BD] shadow-xs space-y-6 relative overflow-hidden">
       {/* ============================================================== */}
       {/* 1. CABEÇALHO DA TORRE DE CONTROLE & PAINEL DE CONTROLE DE HORÁRIOS */}
       {/* ============================================================== */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#D8D0BD]/70 pb-5">
         <div>
-          <div className="flex items-center space-x-2 text-[10px] uppercase font-bold tracking-widest text-[#AD841D] mb-1">
-            <Zap className="w-3.5 h-3.5 text-[#AD841D]" />
+          <div className="flex items-center space-x-2 text-[10px] uppercase font-bold tracking-widest text-[#80611F] mb-1">
+            <Zap className="w-3.5 h-3.5 text-[#C7A03A]" />
             <span>Torre de Controle Operacional • Régua Dinâmica Centralizada</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#2D1914] flex items-center gap-2">
-            <span>Visão Operacional do Dia & Encaixes Sincronizados</span>
+
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1D3D3C] flex items-center gap-2 font-sans">
+            <span>Visão Operacional do Dia &amp; Encaixes Sincronizados</span>
           </h2>
-          <p className="text-xs text-stone-600 mt-0.5">
+
+          {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+          <div className="relative w-36 sm:w-48 h-2.5 my-1.5 opacity-80 pointer-events-none">
+            <img
+              src="/brand/Grafismos/Linha grafismo 1.png"
+              alt=""
+              className="w-full h-full object-contain object-left"
+            />
+          </div>
+
+          <p className="text-xs text-[#736455] mt-0.5">
             Ponteiro fixo no centro: a régua desliza continuamente para a esquerda conforme o tempo passa, mantendo procedimentos simultâneos perfeitamente alinhados um acima do outro.
           </p>
         </div>
@@ -381,26 +392,26 @@ export function LinearTimelineMaster({
       {/* 2. ACCORDION COLAPSÁVEL: PROCEDIMENTOS EM ANDAMENTO             */}
       {/* (Exibido 5 min antes de iniciar até o término do procedimento) */}
       {/* ============================================================== */}
-      <div className="rounded-2xl border border-[#E7DCCE] bg-white overflow-hidden shadow-2xs">
+      <div className="rounded-2xl border border-[#D8D0BD] bg-white overflow-hidden shadow-2xs">
         {/* Barra de Topo do Accordion */}
         <button
           onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-          className="w-full p-4 sm:p-5 flex items-center justify-between text-left hover:bg-[#FAF7F2]/60 transition-colors"
+          className="w-full p-4 sm:p-5 flex items-center justify-between text-left hover:bg-[#FAF7F2]/80 transition-colors"
         >
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl chocolate-gradient flex items-center justify-center text-[#DBAE3B] shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-2xl brand-green-gradient border border-[#C7A03A]/40 flex items-center justify-center text-[#D9B85F] shrink-0 shadow-xs">
               <Scissors className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-[#AD841D]">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-[#80611F]">
                   Cockpit Operacional
                 </span>
                 <span
                   className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                     activeOrImminentAppointments.length > 0
-                      ? "bg-emerald-100 text-emerald-800 animate-pulse"
-                      : "bg-stone-100 text-stone-600"
+                      ? "bg-emerald-100 text-emerald-800 animate-pulse border border-emerald-300"
+                      : "bg-[#F0EFE3] text-[#707956] border border-[#D3D0B5]"
                   }`}
                 >
                   {activeOrImminentAppointments.length > 0
@@ -408,17 +419,17 @@ export function LinearTimelineMaster({
                     : "Sem atendimento ativo agora"}
                 </span>
               </div>
-              <h3 className="font-bold text-sm sm:text-base text-[#2D1914]">
+              <h3 className="font-bold text-sm sm:text-base text-[#1D3D3C] font-sans">
                 Cards de Etapas dos Procedimentos
               </h3>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-semibold text-stone-400 hidden sm:inline">
+            <span className="text-xs font-semibold text-[#736455] hidden sm:inline">
               {isAccordionOpen ? "Recolher Painel" : "Expandir Painel"}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-[#FAF7F2] border border-[#E7DCCE] flex items-center justify-center text-[#5E372C] transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] flex items-center justify-center text-[#1D3D3C] transition-transform">
               {isAccordionOpen ? (
                 <ChevronUp className="w-4 h-4" />
               ) : (
@@ -1166,13 +1177,13 @@ export function LinearTimelineMaster({
 
       {/* Toast Flutuante de Desfazer Avanço de Etapa */}
       {undoState && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#2D1914] text-white px-5 py-3 rounded-2xl shadow-2xl border border-[#C59B27]/60 flex items-center gap-3 animate-fade-in">
+        <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 bg-[#2D1914] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#C59B27]/60 flex items-center justify-between sm:justify-start gap-3 animate-fade-in max-w-md mx-auto sm:mx-0">
           <span className="text-xs">
             Etapa de <strong>{undoState.clientName}</strong> avançada.
           </span>
           <button
             onClick={handleUndoAdvance}
-            className="px-3 py-1.5 rounded-xl bg-[#C59B27] text-[#2D1914] font-extrabold text-xs hover:bg-[#DBAE3B] transition-all shadow-xs flex items-center gap-1"
+            className="px-3 py-1.5 rounded-xl bg-[#C59B27] text-[#2D1914] font-extrabold text-xs hover:bg-[#DBAE3B] transition-all shadow-xs flex items-center gap-1 shrink-0"
           >
             <span>↩️ Desfazer</span>
           </button>

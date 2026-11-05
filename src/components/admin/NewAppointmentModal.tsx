@@ -13,6 +13,9 @@ interface NewAppointmentModalProps {
   clients?: SalonClient[];
   prefilledDate?: string;
   prefilledTime?: string;
+  prefilledClientName?: string;
+  prefilledClientPhone?: string;
+  prefilledServiceId?: string;
   onSave: (appointment: Appointment) => void;
   onClose: () => void;
 }
@@ -20,19 +23,41 @@ interface NewAppointmentModalProps {
 export function NewAppointmentModal({
   services,
   clients,
-  prefilledDate = "2026-10-17",
+  prefilledDate,
   prefilledTime = "09:00",
+  prefilledClientName = "",
+  prefilledClientPhone = "",
+  prefilledServiceId,
   onSave,
   onClose,
 }: NewAppointmentModalProps) {
   const [selectedServiceId, setSelectedServiceId] = useState<string>(
-    services[0]?.id || ""
+    prefilledServiceId || services[0]?.id || ""
   );
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [date, setDate] = useState(prefilledDate);
+  const [clientName, setClientName] = useState(prefilledClientName);
+  const [clientPhone, setClientPhone] = useState(prefilledClientPhone);
+  const [date, setDate] = useState(prefilledDate || "");
   const [time, setTime] = useState(prefilledTime);
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (!prefilledDate) {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      setDate(`${y}-${m}-${d}`);
+    } else {
+      setDate(prefilledDate);
+    }
+  }, [prefilledDate]);
+
+  useEffect(() => {
+    if (prefilledClientName) setClientName(prefilledClientName);
+    if (prefilledClientPhone) setClientPhone(prefilledClientPhone);
+    if (prefilledServiceId) setSelectedServiceId(prefilledServiceId);
+    if (prefilledTime) setTime(prefilledTime);
+  }, [prefilledClientName, prefilledClientPhone, prefilledServiceId, prefilledTime]);
 
   // Autocomplete de clientes
   const [clientSearchQuery, setClientSearchQuery] = useState("");

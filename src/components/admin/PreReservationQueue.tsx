@@ -30,6 +30,7 @@ interface PreReservationQueueProps {
   dataService?: typeof SupabaseDataService;
   onConvertToAppointment?: (preReservation: PreReservation) => void;
   onViewTriage?: (triageSubmissionId: string) => void;
+  onBuildProposal?: (preReservation: PreReservation) => void;
 }
 
 export function PreReservationQueue({
@@ -38,6 +39,7 @@ export function PreReservationQueue({
   dataService = SupabaseDataService,
   onConvertToAppointment,
   onViewTriage,
+  onBuildProposal,
 }: PreReservationQueueProps) {
   const [preReservations, setPreReservations] = useState<PreReservation[]>([]);
   const [filterStatus, setFilterStatus] = useState<"all" | PreReservationStatus>("pending");
@@ -75,14 +77,24 @@ export function PreReservationQueue({
     loadPreReservations();
   }, [loadPreReservations]);
 
-  // Contagem de pendentes
-  const pendingCount = preReservations.filter((p) => p.status === "pending").length;
+  // Normalizador de status para tolerar 'confirmed' como 'approved'
+  const getNormalizedStatus = (status: PreReservationStatus | string): PreReservationStatus => {
+    if (status === "confirmed") return "approved";
+    return status as PreReservationStatus;
+  };
 
-  // Filtragem local
-  const filteredList = preReservations.filter((p) => {
-    if (filterStatus === "all") return true;
-    return p.status === filterStatus;
-  });
+  // Contagem de pendentes
+  const pendingCount = preReservations.filter((p) => getNormalizedStatus(p.status) === "pending").length;
+
+  // Filtragem local com deduplicação por cliente + data
+  const filteredList = preReservations
+    .filter((p) => {
+      if (filterStatus === "all") return true;
+      return getNormalizedStatus(p.status) === filterStatus;
+    })
+    .filter((item, idx, arr) =>
+      idx === arr.findIndex((t) => t.id === item.id || (t.clientPhone.replace(/\D/g, "") === item.clientPhone.replace(/\D/g, "") && t.requestedDate === item.requestedDate))
+    );
 
   // Ação: Abrir Dia & Confirmar
   const handleApproveAndOpenDay = async (item: PreReservation) => {
@@ -185,8 +197,8 @@ export function PreReservationQueue({
   const getDaysDiffText = (dateStr: string) => {
     try {
       const target = new Date(dateStr + "T00:00:00");
-      // Referência simulada de hoje (28 de outubro de 2026)
-      const now = new Date("2026-10-28T00:00:00");
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
       const diffMs = target.getTime() - now.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -216,24 +228,27 @@ export function PreReservationQueue({
   };
 
   return (
-    <div className="bg-[#1A0F0C] rounded-3xl p-5 sm:p-8 border border-[#5E372C]/50 shadow-2xl text-stone-100 space-y-6 relative overflow-hidden">
+    <div data-tutorial="pre-reservation-queue" className="bg-white/85 backdrop-blur-md rounded-3xl p-5 sm:p-8 border border-[#D8D0BD] shadow-xs text-[#1D3D3C] space-y-6 relative overflow-hidden">
+      {/* Pattern de Arcos de Oliva sutil */}
+      <div className="absolute inset-0 bg-pattern-arches-olive opacity-[0.03] pointer-events-none" />
+
       {/* Toast Inline */}
       {toastMessage && (
         <div
-          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center space-x-3 text-sm font-semibold transition-all duration-300 animate-slide-up ${
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-xl border flex items-center space-x-3 text-sm font-semibold transition-all duration-300 animate-slide-up ${
             toastMessage.type === "success"
-              ? "bg-[#2D1914] text-amber-200 border-[#DBAE3B]/60 shadow-amber-950/40"
+              ? "bg-[#1D3D3C] text-[#FCF5EB] border-[#C7A03A]/60 shadow-[#1D3D3C]/30"
               : toastMessage.type === "error"
-              ? "bg-red-950 text-red-200 border-red-600/80 shadow-red-950/50"
-              : "bg-stone-900 text-stone-200 border-stone-700 shadow-black/60"
+              ? "bg-red-950 text-red-100 border-red-500 shadow-red-950/40"
+              : "bg-[#FCF5EB] text-[#1D3D3C] border-[#D8D0BD] shadow-black/20"
           }`}
         >
           {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-[#DBAE3B] shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-[#D9B85F] shrink-0" />
           ) : toastMessage.type === "error" ? (
             <XCircle className="w-5 h-5 text-red-400 shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            <AlertCircle className="w-5 h-5 text-[#80611F] shrink-0" />
           )}
           <span>{toastMessage.text}</span>
         </div>
@@ -242,33 +257,43 @@ export function PreReservationQueue({
       {/* ============================================================== */}
       {/* CABEÇALHO + BADGES DE STATUS + FILTROS                        */}
       {/* ============================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-[#5E372C]/40">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-[#D8D0BD] relative z-10">
         <div>
-          <div className="flex items-center space-x-2 text-[11px] uppercase font-extrabold tracking-widest text-[#DBAE3B] mb-1.5">
-            <Bell className="w-4 h-4 text-[#DBAE3B]" />
+          <div className="flex items-center space-x-2 text-[11px] uppercase font-extrabold tracking-widest text-[#80611F] mb-1.5">
+            <Bell className="w-4 h-4 text-[#C7A03A]" />
             <span>Fila de Espera Exclusiva</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
+          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#1D3D3C] flex items-center gap-2.5">
             <span>Pré-Reservas Solicitadas</span>
             {pendingCount > 0 && (
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold animate-pulse">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/60 font-bold animate-pulse">
                 {pendingCount} pendente{pendingCount > 1 ? "s" : ""}
               </span>
             )}
           </h2>
-          <p className="text-xs text-stone-400 mt-1 max-w-xl">
+
+          {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+          <div className="relative w-36 sm:w-44 h-2.5 my-1.5 opacity-80 pointer-events-none">
+            <img
+              src="/brand/Grafismos/Linha grafismo 1.png"
+              alt=""
+              className="w-full h-full object-contain object-left"
+            />
+          </div>
+
+          <p className="text-xs text-[#736455] mt-1 max-w-xl">
             Clientes que solicitaram agendamento em datas ainda fechadas na sua agenda. Ao clicar em &quot;Abrir Dia &amp; Confirmar&quot;, o dia é aberto automaticamente.
           </p>
         </div>
 
         {/* Filtros de Status */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-stone-950/70 p-1.5 rounded-2xl border border-stone-800">
+        <div className="flex flex-wrap items-center gap-1.5 bg-[#FAF7F2] p-1.5 rounded-2xl border border-[#D8D0BD] shadow-xs">
           <button
             onClick={() => setFilterStatus("all")}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               filterStatus === "all"
-                ? "bg-[#2D1914] text-white shadow-xs border border-[#DBAE3B]/40"
-                : "text-stone-400 hover:text-stone-200"
+                ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40 font-bold"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
             Todas ({preReservations.length})
@@ -277,40 +302,40 @@ export function PreReservationQueue({
             onClick={() => setFilterStatus("pending")}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               filterStatus === "pending"
-                ? "bg-amber-950/80 text-amber-300 shadow-xs border border-amber-600/60"
-                : "text-stone-400 hover:text-stone-200"
+                ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40 font-bold"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Pendentes ({preReservations.filter((p) => p.status === "pending").length})
+            Pendentes ({preReservations.filter((p) => getNormalizedStatus(p.status) === "pending").length})
           </button>
           <button
             onClick={() => setFilterStatus("approved")}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               filterStatus === "approved"
-                ? "bg-emerald-950/80 text-emerald-300 shadow-xs border border-emerald-600/60"
-                : "text-stone-400 hover:text-stone-200"
+                ? "bg-emerald-100 text-emerald-900 shadow-xs border border-emerald-300 font-bold"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Aprovadas ({preReservations.filter((p) => p.status === "approved").length})
+            Aprovadas ({preReservations.filter((p) => getNormalizedStatus(p.status) === "approved").length})
           </button>
           <button
             onClick={() => setFilterStatus("declined")}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               filterStatus === "declined"
-                ? "bg-red-950/80 text-red-300 shadow-xs border border-red-600/60"
-                : "text-stone-400 hover:text-stone-200"
+                ? "bg-red-100 text-red-900 shadow-xs border border-red-300 font-bold"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Recusadas ({preReservations.filter((p) => p.status === "declined").length})
+            Recusadas ({preReservations.filter((p) => getNormalizedStatus(p.status) === "declined").length})
           </button>
 
           <button
             onClick={loadPreReservations}
             disabled={isLoading}
-            className="p-1.5 ml-1 rounded-xl text-stone-400 hover:text-white transition-colors"
+            className="p-1.5 ml-1 rounded-xl text-[#736455] hover:text-[#1D3D3C] transition-colors"
             title="Recarregar Pré-Reservas"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#DBAE3B]" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#C7A03A]" : ""}`} />
           </button>
         </div>
       </div>
@@ -319,37 +344,38 @@ export function PreReservationQueue({
       {/* LISTA DE CARDS OU ESTADO VAZIO                                */}
       {/* ============================================================== */}
       {filteredList.length === 0 ? (
-        <div className="py-12 px-4 text-center rounded-2xl bg-stone-950/40 border border-dashed border-stone-800 space-y-3">
-          <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#DBAE3B] mx-auto">
+        <div className="py-12 px-4 text-center rounded-2xl bg-[#FAF7F2]/60 border border-dashed border-[#D8D0BD] space-y-3 relative z-10">
+          <div className="w-12 h-12 rounded-full bg-[#C7A03A]/15 border border-[#C7A03A]/30 flex items-center justify-center text-[#80611F] mx-auto">
             <Sparkles className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-stone-200">
+          <h3 className="text-base font-bold text-[#1D3D3C]">
             Nenhuma pré-reserva {filterStatus !== "all" ? `com status "${filterStatus}"` : "registrada"}
           </h3>
-          <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
+          <p className="text-xs text-[#736455] max-w-md mx-auto leading-relaxed">
             Quando clientes solicitarem datas fora da sua agenda aberta, elas aparecerão aqui para você decidir se deseja liberar o dia e confirmar o atendimento.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
           {filteredList.map((item) => {
-            const isPending = item.status === "pending";
-            const isApproved = item.status === "approved";
-            const isDeclined = item.status === "declined";
-            const isConverted = item.status === "converted";
+            const normStatus = getNormalizedStatus(item.status);
+            const isPending = normStatus === "pending";
+            const isApproved = normStatus === "approved";
+            const isDeclined = normStatus === "declined";
+            const isConverted = normStatus === "converted";
             const daysRemaining = getDaysDiffText(item.requestedDate);
 
             return (
               <div
                 key={item.id}
-                className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between space-y-4 shadow-lg ${
+                className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between space-y-4 shadow-xs ${
                   isPending
-                    ? "bg-[#2D1914] border-[#DBAE3B]/40 hover:border-[#DBAE3B] shadow-amber-950/20"
+                    ? "bg-[#FCF5EB] border-2 border-[#C7A03A]/60 hover:border-[#C7A03A]"
                     : isApproved
-                    ? "bg-stone-900/90 border-emerald-800/40 hover:border-emerald-700/60"
+                    ? "bg-white/90 border-emerald-300 hover:border-emerald-500"
                     : isDeclined
-                    ? "bg-stone-950/80 border-stone-800 opacity-80"
-                    : "bg-stone-900/90 border-amber-500/40"
+                    ? "bg-[#FAF7F2] border-[#D8D0BD] opacity-80"
+                    : "bg-white/90 border-[#C7A03A]/40"
                 }`}
               >
                 {/* Topo do Card: Badge de Status + Nome da Cliente + Data Solicitada */}
@@ -358,60 +384,60 @@ export function PreReservationQueue({
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         {isPending && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/60 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#C7A03A] animate-ping" />
                             <span>🔔 Pendente</span>
                           </span>
                         )}
                         {isApproved && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
                             ✅ Aprovada
                           </span>
                         )}
                         {isDeclined && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-50 text-red-800 border border-red-300">
                             ❌ Recusada
                           </span>
                         )}
                         {isConverted && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FAF7F2] text-[#80611F] border border-[#C7A03A]/40">
                             💎 Agendamento Criado
                           </span>
                         )}
                       </div>
 
-                      <h4 className="text-base font-extrabold text-white tracking-tight">
+                      <h4 className="text-base font-extrabold text-[#1D3D3C] tracking-tight">
                         {item.clientName}
                       </h4>
                     </div>
 
                     {/* Data Solicitada em destaque */}
                     <div className="text-right shrink-0">
-                      <span className="text-xs font-bold text-[#DBAE3B] block">
+                      <span className="text-xs font-bold text-[#80611F] block">
                         {formatDisplayDate(item.requestedDate)}
                       </span>
-                      <span className="text-[10px] text-stone-400 font-medium">
+                      <span className="text-[10px] text-[#736455] font-medium">
                         {daysRemaining}
                       </span>
                     </div>
                   </div>
 
                   {/* Detalhes do Procedimento e Período */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-stone-950/60 border border-stone-800/80 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-white/80 border border-[#D8D0BD] text-xs">
                     <div>
-                      <span className="text-[10px] text-stone-400 block font-medium">
+                      <span className="text-[10px] text-[#736455] block font-medium">
                         Procedimento Desejado:
                       </span>
-                      <span className="font-bold text-stone-200">
+                      <span className="font-bold text-[#1D3D3C]">
                         {item.serviceName || "Personalizado (Consultoria)"}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-stone-400 block font-medium">
+                      <span className="text-[10px] text-[#736455] block font-medium">
                         Período / Horário:
                       </span>
-                      <span className="font-bold text-amber-300">
+                      <span className="font-bold text-[#80611F]">
                         {getPeriodLabel(item.preferredPeriod, item.preferredTime)}
                       </span>
                     </div>
@@ -419,27 +445,27 @@ export function PreReservationQueue({
 
                   {/* Motivo da Cliente ou Anotação */}
                   {item.adminNotes && (
-                    <div className="text-xs italic text-stone-300 bg-stone-900/60 px-3 py-2 rounded-xl border border-stone-800">
+                    <div className="text-xs italic text-[#736455] bg-[#FAF7F2] px-3 py-2 rounded-xl border border-[#D8D0BD]">
                       &quot;{item.adminNotes}&quot;
                     </div>
                   )}
 
                   {/* Contato da Cliente */}
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-stone-400 pt-1">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[#736455] pt-1">
                     <a
                       href={`https://wa.me/55${item.clientPhone.replace(/\D/g, "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center space-x-1.5 hover:text-emerald-400 transition-colors"
+                      className="flex items-center space-x-1.5 hover:text-emerald-700 transition-colors font-medium"
                       title="Abrir WhatsApp"
                     >
-                      <Phone className="w-3.5 h-3.5 text-emerald-500" />
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{item.clientPhone}</span>
                     </a>
 
                     {item.clientEmail && (
-                      <div className="flex items-center space-x-1.5 text-stone-400">
-                        <Mail className="w-3.5 h-3.5 text-stone-500" />
+                      <div className="flex items-center space-x-1.5 text-[#736455]">
+                        <Mail className="w-3.5 h-3.5 text-[#736455]" />
                         <span className="truncate max-w-[180px]">{item.clientEmail}</span>
                       </div>
                     )}
@@ -447,16 +473,27 @@ export function PreReservationQueue({
                 </div>
 
                 {/* Barra de Ações para a Gleicy */}
-                <div className="pt-3 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2">
+                <div className="pt-3 border-t border-[#D8D0BD] flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {item.triageSubmissionId && (
                       <button
                         onClick={() => onViewTriage && onViewTriage(item.triageSubmissionId!)}
-                        className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-stone-700"
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#1D3D3C] text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-[#D8D0BD] shadow-xs"
                         title="Ver formulário de anamnese/triagem preenchido"
                       >
-                        <FileText className="w-3.5 h-3.5 text-[#DBAE3B]" />
+                        <FileText className="w-3.5 h-3.5 text-[#C7A03A]" />
                         <span>Ver Triagem</span>
+                      </button>
+                    )}
+
+                    {onBuildProposal && (
+                      <button
+                        onClick={() => onBuildProposal(item)}
+                        className="px-3 py-1.5 rounded-xl brand-green-gradient text-white text-xs font-bold flex items-center space-x-1.5 transition-colors border border-[#C7A03A]/40 shadow-xs hover:border-[#C7A03A]"
+                        title="Construir proposta de transformação para este encaixe"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-[#D9B85F]" />
+                        <span>Montar Proposta</span>
                       </button>
                     )}
                   </div>
@@ -467,7 +504,7 @@ export function PreReservationQueue({
                       <button
                         onClick={() => setDecliningItem(item)}
                         disabled={isProcessingAction}
-                        className="p-2 rounded-xl bg-stone-900 hover:bg-red-950/80 text-stone-400 hover:text-red-300 border border-stone-800 hover:border-red-800/60 transition-colors"
+                        className="p-2 rounded-xl bg-white hover:bg-red-50 text-[#736455] hover:text-red-700 border border-[#D8D0BD] hover:border-red-300 transition-colors shadow-xs"
                         title="Recusar pré-reserva"
                       >
                         <X className="w-4 h-4" />
@@ -477,7 +514,8 @@ export function PreReservationQueue({
                       <button
                         onClick={() => handleApproveAndOpenDay(item)}
                         disabled={isProcessingAction}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-stone-950 text-xs font-extrabold flex items-center space-x-1.5 shadow-md shadow-amber-950/40 active:scale-95 transition-all disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl gold-gradient text-[#1D3D3C] text-xs font-extrabold flex items-center space-x-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
+                        title="Abrir turno automaticamente na agenda sem emitir proposta"
                       >
                         <Check className="w-4 h-4 stroke-[3]" />
                         <span>Abrir Dia &amp; Confirmar</span>
@@ -486,7 +524,7 @@ export function PreReservationQueue({
                   )}
 
                   {!isPending && (
-                    <div className="text-[11px] text-stone-400 ml-auto">
+                    <div className="text-[11px] text-[#736455] font-medium ml-auto">
                       {isApproved && "Dia aberto para este atendimento"}
                       {isDeclined && "Solicitação finalizada como recusada"}
                       {isConverted && "Agendamento registrado no calendário"}
@@ -501,28 +539,28 @@ export function PreReservationQueue({
 
       {/* Modal de Confirmação de Recusa */}
       {decliningItem && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#2D1914] border border-[#DBAE3B]/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-[#5E372C]">
-              <h4 className="text-base font-bold text-white flex items-center gap-2">
-                <XCircle className="w-5 h-5 text-red-400" />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#D8D0BD] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-scale-up text-[#1D3D3C]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#D8D0BD]">
+              <h4 className="text-base font-bold text-[#1D3D3C] flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-500" />
                 <span>Recusar Pré-Reserva</span>
               </h4>
               <button
                 onClick={() => setDecliningItem(null)}
-                className="w-7 h-7 rounded-full bg-stone-800 text-stone-400 hover:text-white flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-[#FAF7F2] text-[#736455] hover:text-[#1D3D3C] flex items-center justify-center transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-stone-300">
-              Você está recusando a solicitação de <strong>{decliningItem.clientName}</strong> para a data{" "}
-              <strong>{formatDisplayDate(decliningItem.requestedDate)}</strong>.
+            <p className="text-xs text-[#736455]">
+              Você está recusando a solicitação de <strong className="text-[#1D3D3C]">{decliningItem.clientName}</strong> para a data{" "}
+              <strong className="text-[#1D3D3C]">{formatDisplayDate(decliningItem.requestedDate)}</strong>.
             </p>
 
             <div>
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Motivo ou Nota Interna (opcional):
               </label>
               <textarea
@@ -530,21 +568,21 @@ export function PreReservationQueue({
                 placeholder="Ex: Sem horário disponível nesta data / Salão em reforma"
                 value={declineReason}
                 onChange={(e) => setDeclineReason(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-700 text-white text-xs outline-none focus:border-[#DBAE3B] placeholder-stone-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs outline-none focus:border-[#C7A03A] placeholder-[#736455]/60"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setDecliningItem(null)}
-                className="px-4 py-2 rounded-xl bg-stone-800 text-xs font-semibold text-stone-300 hover:bg-stone-700"
+                className="px-4 py-2 rounded-xl bg-[#FAF7F2] text-xs font-semibold text-[#736455] hover:text-[#1D3D3C] border border-[#D8D0BD] transition-colors"
               >
                 Voltar
               </button>
               <button
                 onClick={handleConfirmDecline}
                 disabled={isProcessingAction}
-                className="px-4 py-2 rounded-xl bg-red-900/90 hover:bg-red-800 text-white text-xs font-bold shadow-md"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md"
               >
                 Confirmar Recusa
               </button>

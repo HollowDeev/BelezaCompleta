@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Appointment } from "@/types/appointment";
 import { formatBRL } from "@/lib/utils";
 import {
@@ -30,7 +30,41 @@ export function CalendarMasterView({
   onSelectProposal,
 }: CalendarMasterViewProps) {
   const [viewMode, setViewMode] = useState<"mes" | "semana" | "dia">("mes");
-  const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 10 }); // Outubro 2026
+  const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 11 });
+
+  useEffect(() => {
+    const now = new Date();
+    setCurrentYearMonth({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  }, []);
+
+  // Cálculo dinâmico dos dias da semana (Segunda a Sábado) para a visão semanal
+  const weekDays = useMemo(() => {
+    if (!selectedDate || !selectedDate.includes("-")) return [];
+    const parts = selectedDate.split("-").map(Number);
+    const base = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dayOfWeek = base.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(base);
+    monday.setDate(base.getDate() + diffToMonday);
+
+    const days: { dateStr: string; label: string; dayNum: number; monthNum: number }[] = [];
+    const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const yStr = d.getFullYear();
+      const mStr = String(d.getMonth() + 1).padStart(2, "0");
+      const dStr = String(d.getDate()).padStart(2, "0");
+      days.push({
+        dateStr: `${yStr}-${mStr}-${dStr}`,
+        label: dayNames[d.getDay()],
+        dayNum: d.getDate(),
+        monthNum: d.getMonth() + 1,
+      });
+    }
+    return days;
+  }, [selectedDate]);
 
   const daysInMonth = new Date(currentYearMonth.year, currentYearMonth.month, 0).getDate();
   const startDayOffset = new Date(currentYearMonth.year, currentYearMonth.month - 1, 1).getDay();
@@ -55,81 +89,95 @@ export function CalendarMasterView({
     }
   };
 
-  // Agendamentos filtrados para o dia selecionado
+  // Agendamentos filtrados para o dia selecionado (apenas agendamentos reais/confirmados)
   const selectedDayAppointments = appointments.filter(
-    (a) => a.date === selectedDate && a.status !== "cancelled"
+    (a) => a.date === selectedDate && a.status !== "cancelled" && a.status !== "pending_proposal"
   );
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
+    <div className="bg-white/85 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3.5 sm:p-8 border border-[#D8D0BD] shadow-xs space-y-6 relative overflow-hidden">
       {/* Topo do Calendário: Navegação e Seletor de Vistas */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1">
+      <div data-tutorial="calendar-controls" className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#D8D0BD]/70 pb-5">
+        <div>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={handlePrevMonth}
+                className="p-1.5 sm:p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#EEE8DD] text-[#736455] transition-colors border border-[#D8D0BD]"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleNextMonth}
+                className="p-1.5 sm:p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#EEE8DD] text-[#736455] transition-colors border border-[#D8D0BD]"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <h2 className="text-lg sm:text-2xl font-bold text-[#1D3D3C] tracking-tight font-sans">
+              {monthNames[currentYearMonth.month - 1]} {currentYearMonth.year}
+            </h2>
+
             <button
-              onClick={handlePrevMonth}
-              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#5E372C] transition-colors border border-[#E7DCCE]"
+              onClick={() => {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = now.getMonth() + 1;
+                const d = now.getDate();
+                setCurrentYearMonth({ year: y, month: m });
+                onSelectDate(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+              }}
+              className="px-2.5 sm:px-3 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-[#80611F] bg-[#FCF9F0] border border-[#C7A03A]/50 hover:bg-[#F6ECCF] transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleNextMonth}
-              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#5E372C] transition-colors border border-[#E7DCCE]"
-            >
-              <ChevronRight className="w-4 h-4" />
+              Hoje
             </button>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-bold text-[#2D1914] tracking-tight">
-            {monthNames[currentYearMonth.month - 1]} {currentYearMonth.year}
-          </h2>
-
-          <button
-            onClick={() => {
-              const now = new Date();
-              const y = now.getFullYear();
-              const m = now.getMonth() + 1;
-              const d = now.getDate();
-              setCurrentYearMonth({ year: y, month: m });
-              onSelectDate(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
-            }}
-            className="px-3 py-1 rounded-xl text-xs font-semibold text-[#AD841D] bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
-          >
-            Hoje
-          </button>
+          {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+          <div className="relative w-36 sm:w-44 h-2.5 my-1 opacity-75 pointer-events-none">
+            <img
+              src="/brand/Grafismos/Linha grafismo 1.png"
+              alt=""
+              className="w-full h-full object-contain object-left"
+            />
+          </div>
         </div>
 
         {/* Alternador de Vistas: Mês | Semana | Dia */}
-        <div className="flex items-center p-1 bg-[#FAF7F2] rounded-2xl border border-[#E7DCCE]">
+        <div className="flex items-center p-1 bg-[#FAF7F2] rounded-2xl border border-[#D8D0BD] text-xs">
           <button
             onClick={() => setViewMode("mes")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all ${
               viewMode === "mes"
-                ? "bg-[#2D1914] text-white shadow-xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
+                ? "bg-[#1D3D3C] text-white shadow-xs border border-[#C7A03A]/30"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Visão Mensal
+            <span className="hidden sm:inline">Visão Mensal</span>
+            <span className="sm:hidden">Mês</span>
           </button>
           <button
             onClick={() => setViewMode("semana")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all ${
               viewMode === "semana"
-                ? "bg-[#2D1914] text-white shadow-xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
+                ? "bg-[#1D3D3C] text-white shadow-xs border border-[#C7A03A]/30"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Visão Semanal
+            <span className="hidden sm:inline">Visão Semanal</span>
+            <span className="sm:hidden">Semana</span>
           </button>
           <button
             onClick={() => setViewMode("dia")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all ${
               viewMode === "dia"
-                ? "bg-[#2D1914] text-white shadow-xs"
-                : "text-[#5E372C] hover:text-[#2D1914]"
+                ? "bg-[#1D3D3C] text-white shadow-xs border border-[#C7A03A]/30"
+                : "text-[#736455] hover:text-[#1D3D3C]"
             }`}
           >
-            Visão Diária
+            <span className="hidden sm:inline">Visão Diária</span>
+            <span className="sm:hidden">Dia</span>
           </button>
         </div>
       </div>
@@ -137,7 +185,7 @@ export function CalendarMasterView({
       {/* 1. VISÃO MENSAL (GRID DE DIAS COM BADGES E FATURAMENTO) */}
       {viewMode === "mes" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-[#AD841D] uppercase tracking-wider mb-1">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-bold text-[#80611F] uppercase tracking-wider mb-1">
             <span>Dom</span>
             <span>Seg</span>
             <span>Ter</span>
@@ -147,7 +195,7 @@ export function CalendarMasterView({
             <span>Sáb</span>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {/* Espaçamento inicial baseado no dia da semana em que o mês começa */}
             {[...Array(startDayOffset)].map((_, i) => (
               <div key={`empty-${i}`} className="h-24 sm:h-28 rounded-2xl bg-[#FAF7F2]/40 border border-transparent" />
@@ -157,7 +205,11 @@ export function CalendarMasterView({
             {[...Array(daysInMonth)].map((_, i) => {
               const dayNum = i + 1;
               const dateStr = `${currentYearMonth.year}-${String(currentYearMonth.month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-              const dayApts = appointments.filter((a) => a.date === dateStr && a.status !== "cancelled");
+              const dayApts = appointments
+                .filter((a) => a.date === dateStr && a.status !== "cancelled")
+                .filter((apt, idx, arr) =>
+                  idx === arr.findIndex((t) => t.id === apt.id || (t.startTime === apt.startTime && t.clientName.trim().toLowerCase() === apt.clientName.trim().toLowerCase()))
+                );
               const isSelected = selectedDate === dateStr;
               const hasPause = dayApts.some((a) => a.stepBlocks?.some((s) => s.type === "pause"));
               const dayRevenue = dayApts.reduce((sum, a) => sum + a.price, 0);
@@ -168,23 +220,23 @@ export function CalendarMasterView({
                   onClick={() => onSelectDate(dateStr)}
                   className={`h-16 sm:h-28 p-1 sm:p-2 rounded-xl sm:rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
                     isSelected
-                      ? "border-[#C59B27] bg-[#FDF9F0] ring-2 ring-[#C59B27]/30 shadow-xs"
-                      : "border-[#E7DCCE] bg-white hover:border-[#AD841D]/60 hover:bg-[#FAF7F2]"
+                      ? "border-[#C7A03A] bg-[#FCF9F0] ring-2 ring-[#C7A03A]/40 shadow-xs"
+                      : "border-[#D8D0BD] bg-white hover:border-[#C7A03A]/60 hover:bg-[#FAF7F2]"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
                         isSelected
-                          ? "bg-[#2D1914] text-white"
-                          : "text-[#2D1914]"
+                          ? "bg-[#1D3D3C] text-[#D9B85F]"
+                          : "text-[#1D3D3C]"
                       }`}
                     >
                       {dayNum}
                     </span>
 
                     {hasPause && (
-                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-500" title="Possui janelas de pausa química livres" />
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#C7A03A]" title="Possui janelas de pausa química livres" />
                     )}
                   </div>
 
@@ -193,12 +245,12 @@ export function CalendarMasterView({
                       {/* Em mobile, exibe contagem compacta com dot */}
                       <div className="flex sm:hidden items-center justify-center gap-1 mt-0.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                        <span className="text-[9px] font-extrabold text-[#2D1914]">{dayApts.length}</span>
+                        <span className="text-[9px] font-extrabold text-[#1D3D3C]">{dayApts.length}</span>
                       </div>
 
                       {/* Em desktop (sm:), exibe detalhes com faturamento */}
                       <div className="hidden sm:block">
-                        <div className="text-[10px] font-bold text-[#2D1914] truncate">
+                        <div className="text-[10px] font-bold text-[#1D3D3C] truncate">
                           {dayApts.length} cliente(s)
                         </div>
                         <div className="text-[10px] text-emerald-800 font-bold">
@@ -215,7 +267,7 @@ export function CalendarMasterView({
           </div>
 
           {/* Detalhe Rápido do Dia Selecionado */}
-          <div className="p-5 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="p-5 rounded-2xl bg-[#FAF7F2] border border-[#D8D0BD] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <span className="text-[10px] uppercase font-bold tracking-widest text-[#AD841D]">
                 Dia Selecionado: {selectedDate}
@@ -240,25 +292,31 @@ export function CalendarMasterView({
       {viewMode === "semana" && (
         <div className="space-y-4">
           <p className="text-xs text-stone-600">
-            Semana de 12 a 18 de Outubro de 2026. As áreas em âmbar pontilhado representam janelas de químicas livres para encaixe:
+            {weekDays.length > 0
+              ? `Semana de ${String(weekDays[0].dayNum).padStart(2, "0")}/${String(weekDays[0].monthNum).padStart(2, "0")} a ${String(weekDays[weekDays.length - 1].dayNum).padStart(2, "0")}/${String(weekDays[weekDays.length - 1].monthNum).padStart(2, "0")}. As áreas em âmbar pontilhado representam janelas de químicas livres para encaixe:`
+              : "Semana selecionada. As áreas em âmbar pontilhado representam janelas de químicas livres para encaixe:"}
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            {["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"].map((date) => {
-              const dayApts = appointments.filter((a) => a.date === date && a.status !== "cancelled");
-              const isSelected = selectedDate === date;
+            {weekDays.map((day) => {
+              const dayApts = appointments
+                .filter((a) => a.date === day.dateStr && a.status !== "cancelled")
+                .filter((apt, idx, arr) =>
+                  idx === arr.findIndex((t) => t.id === apt.id || (t.startTime === apt.startTime && t.clientName.trim().toLowerCase() === apt.clientName.trim().toLowerCase()))
+                );
+              const isSelected = selectedDate === day.dateStr;
 
               return (
                 <div
-                  key={date}
-                  onClick={() => onSelectDate(date)}
+                  key={day.dateStr}
+                  onClick={() => onSelectDate(day.dateStr)}
                   className={`p-3 rounded-2xl border transition-all ${
                     isSelected ? "border-[#C59B27] bg-[#FDF9F0]" : "border-[#E7DCCE] bg-white"
                   }`}
                 >
                   <div className="border-b border-[#E7DCCE]/60 pb-2 mb-2 text-center">
                     <span className="text-[10px] uppercase font-bold text-[#AD841D] block">
-                      {date.split("-")[2]}/10
+                      {day.label}, {String(day.dayNum).padStart(2, "0")}/{String(day.monthNum).padStart(2, "0")}
                     </span>
                     <span className="text-xs font-bold text-[#2D1914]">
                       {dayApts.length} atendimentos

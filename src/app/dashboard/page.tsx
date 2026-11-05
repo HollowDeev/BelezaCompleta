@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/supabase/authContext";
 import { SupabaseDataService } from "@/lib/supabase/api";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { subscribeToSync } from "@/lib/sync/syncBus";
 
 import { Sidebar, AdminTab } from "@/components/layout/Sidebar";
 import { DayOperationView } from "@/components/admin/DayOperationView";
@@ -19,15 +21,19 @@ import { FloatingPill } from "@/components/admin/FloatingPill";
 import { AvailabilityManagerView } from "@/components/admin/AvailabilityManagerView";
 import { PreReservationQueue } from "@/components/admin/PreReservationQueue";
 import { ProposalBuilderModal } from "@/components/proposal/ProposalBuilderModal";
+import { SalonSettingsView } from "@/components/admin/SalonSettingsView";
 import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
+import { InteractiveTutorialTour } from "@/components/tutorial/InteractiveTutorialTour";
+import { TutorialHelpModal } from "@/components/tutorial/TutorialHelpModal";
+import { TUTORIAL_STEPS } from "@/components/tutorial/tutorialSteps";
 
 import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
-import { PreReservation } from "@/types/availability";
+import { PreReservation, AvailableDay } from "@/types/availability";
 import { SalonOrganization, UserProfile, DashboardMode } from "@/types/salon";
 import {
   Sparkles,
@@ -41,7 +47,10 @@ import {
   Edit3,
   ExternalLink,
   X,
+  GraduationCap,
+  MessageCircle,
 } from "lucide-react";
+import { generateWhatsAppLink } from "@/lib/utils";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -63,16 +72,69 @@ export default function DashboardPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<SalonClient[]>([]);
   const [preReservations, setPreReservations] = useState<PreReservation[]>([]);
+  const [availableDays, setAvailableDays] = useState<AvailableDay[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-
   // Modais e visualizadores
-  const [selectedDate, setSelectedDate] = useState("2026-10-18");
+  const [selectedDate, setSelectedDate] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    setSelectedDate(`${y}-${m}-${d}`);
+  }, []);
   const [isNewAppointmentModalOpen, setIsNewAppointmentModalOpen] = useState(false);
-  const [newAppointmentPrefill, setNewAppointmentPrefill] = useState<{ date?: string; time?: string }>({});
+  const [newAppointmentPrefill, setNewAppointmentPrefill] = useState<{
+    date?: string;
+    time?: string;
+    clientName?: string;
+    clientPhone?: string;
+    serviceId?: string;
+    preReservationId?: string;
+  }>({});
   const [activeSubmissionForProposal, setActiveSubmissionForProposal] = useState<TriageSubmission | null>(null);
+  const [activePreReservationForProposal, setActivePreReservationForProposal] = useState<PreReservation | null>(null);
   const [editingProposal, setEditingProposal] = useState<LuxuryProposal | null>(null);
   const [viewingProposalModal, setViewingProposalModal] = useState<LuxuryProposal | null>(null);
+
+  // Estados do Algoritmo de Ensino (Tutorial Interativo & Central)
+  const [isTutorialTourOpen, setIsTutorialTourOpen] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+  const [isTutorialHelpModalOpen, setIsTutorialHelpModalOpen] = useState(false);
+
+  // Disparo automático do Tutorial no primeiro acesso
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return;
+    const hasSeenTutorial = localStorage.getItem("glaicy_tutorial_dashboard_seen");
+    if (!hasSeenTutorial) {
+      const timer = setTimeout(() => {
+        setIsTutorialTourOpen(true);
+        setTutorialStepIndex(0);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading]);
+
+  const handleCompleteTutorialTour = () => {
+    setIsTutorialTourOpen(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+    }
+  };
+
+  const handleSkipTutorialTour = () => {
+    setIsTutorialTourOpen(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+    }
+  };
+
+  const handleStartTourFromBeginning = () => {
+    setTutorialStepIndex(0);
+    setIsTutorialTourOpen(true);
+  };
 
   // Atalhos de teclado globais do Dashboard
   useKeyboardShortcuts({
@@ -81,8 +143,11 @@ export default function DashboardPage() {
       setIsNewAppointmentModalOpen(true);
     },
     onGoToToday: () => {
-      const today = new Date().toISOString().split("T")[0];
-      setSelectedDate(today);
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      setSelectedDate(`${y}-${m}-${d}`);
     },
     onPrevDay: () => {
       setSelectedDate((prev) => {
@@ -111,7 +176,7 @@ export default function DashboardPage() {
   const refreshAll = async () => {
     setIsLoadingData(true);
     try {
-      const [org, profs, srvs, forms, subs, props, tpls, apts, clis, preRes] = await Promise.all([
+      const [org, profs, srvs, forms, subs, props, tpls, apts, clis, preRes, avDays] = await Promise.all([
         SupabaseDataService.getOrganization(),
         SupabaseDataService.getProfiles(),
         SupabaseDataService.getServices(),
@@ -122,6 +187,7 @@ export default function DashboardPage() {
         SupabaseDataService.getAppointments(),
         SupabaseDataService.getClients(),
         SupabaseDataService.getPreReservations("11111111-1111-4111-8111-111111111111"),
+        SupabaseDataService.getAvailableDays("58f26242-1e53-432e-b924-dea25ee2068a"),
       ]);
 
       setOrganization(org);
@@ -134,6 +200,7 @@ export default function DashboardPage() {
       setAppointments(apts);
       setClients(clis);
       setPreReservations(preRes || []);
+      setAvailableDays(avDays || []);
 
       if (profile?.dashboardMode) {
         setDashboardMode(profile.dashboardMode);
@@ -149,25 +216,153 @@ export default function DashboardPage() {
     refreshAll();
   }, []);
 
+  // Barramento Instantâneo Local / Cross-Tab (0ms de latência entre abas)
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((payload) => {
+      console.log("Realtime syncBus signal received:", payload);
+      refreshAll();
+    });
+    return unsubscribe;
+  }, []);
+
+  // Assinatura em Tempo Real (Supabase Realtime) para Triagens, Agendamentos, Propostas e Pré-Reservas
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const channel = supabase
+      .channel("dashboard-realtime-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "triage_submissions" },
+        async () => {
+          try {
+            const [subs, preRes, clis] = await Promise.all([
+              SupabaseDataService.getTriageSubmissions(),
+              SupabaseDataService.getPreReservations("11111111-1111-4111-8111-111111111111"),
+              SupabaseDataService.getClients(),
+            ]);
+            setTriageSubmissions(subs);
+            setPreReservations(preRes || []);
+            setClients(clis);
+          } catch (e) {
+            console.error("Erro ao atualizar triagens em realtime:", e);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pre_reservations" },
+        async () => {
+          try {
+            const [preRes, clis] = await Promise.all([
+              SupabaseDataService.getPreReservations(
+                "11111111-1111-4111-8111-111111111111"
+              ),
+              SupabaseDataService.getClients(),
+            ]);
+            setPreReservations(preRes || []);
+            setClients(clis);
+          } catch (e) {
+            console.error("Erro ao atualizar pré-reservas em realtime:", e);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "proposals" },
+        async () => {
+          try {
+            const [props, apts, subs] = await Promise.all([
+              SupabaseDataService.getProposals(),
+              SupabaseDataService.getAppointments(),
+              SupabaseDataService.getTriageSubmissions(),
+            ]);
+            setProposals(props);
+            setAppointments(apts);
+            setTriageSubmissions(subs);
+          } catch (e) {
+            console.error("Erro ao atualizar propostas em realtime:", e);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        async () => {
+          try {
+            const [apts, clis] = await Promise.all([
+              SupabaseDataService.getAppointments(),
+              SupabaseDataService.getClients(),
+            ]);
+            setAppointments(apts);
+            setClients(clis);
+          } catch (e) {
+            console.error("Erro ao atualizar agendamentos em realtime:", e);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "salon_clients" },
+        async () => {
+          try {
+            const clis = await SupabaseDataService.getClients();
+            setClients(clis);
+          } catch (e) {
+            console.error("Erro ao atualizar clientes em realtime:", e);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("✓ Canal Realtime do Dashboard conectado com sucesso!");
+        }
+      });
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
   // Salvar novo agendamento
   const handleSaveNewAppointment = async (newApt: Appointment) => {
-    await SupabaseDataService.saveAppointment(newApt);
+    const saved = await SupabaseDataService.saveAppointment(newApt);
+    if (newAppointmentPrefill.preReservationId) {
+      await SupabaseDataService.updatePreReservationStatus(
+        newAppointmentPrefill.preReservationId,
+        "converted",
+        undefined,
+        saved.id
+      );
+    }
     await refreshAll();
     setIsNewAppointmentModalOpen(false);
   };
 
   // Salvar proposta gerada ou editada
-  const handleSaveProposal = async (proposal: LuxuryProposal) => {
-    await SupabaseDataService.saveProposal(proposal);
+  const handleSaveProposal = async (proposal: LuxuryProposal, openWhatsApp?: boolean) => {
+    const savedProposal = await SupabaseDataService.saveProposal(proposal);
 
-    // Atualiza a triagem vinculada
+    // Atualiza a triagem vinculada com o UUID real retornado
     if (proposal.triageSubmissionId) {
       const sub = triageSubmissions.find((s) => s.id === proposal.triageSubmissionId);
       if (sub) {
         await SupabaseDataService.saveTriageSubmission({
           ...sub,
           status: "proposal_sent",
-          proposalId: proposal.id,
+          proposalId: savedProposal.id,
+        });
+      }
+
+      // Sincroniza o agendamento associado à triagem com o ID da proposta e preço aprovado
+      const matchedApt = appointments.find((a) => a.triageSubmissionId === proposal.triageSubmissionId);
+      if (matchedApt) {
+        await SupabaseDataService.saveAppointment({
+          ...matchedApt,
+          proposalId: savedProposal.id,
+          price: savedProposal.totalWithDiscount || savedProposal.totalOriginal || matchedApt.price,
         });
       }
     }
@@ -175,7 +370,15 @@ export default function DashboardPage() {
     await refreshAll();
     setActiveSubmissionForProposal(null);
     setEditingProposal(null);
-    setViewingProposalModal(proposal);
+    setViewingProposalModal(savedProposal);
+
+    if (openWhatsApp && savedProposal.clientPhone) {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const proposalUrl = `${origin}/proposta/${savedProposal.id}`;
+      const msg = `Olá, ${savedProposal.clientName}! ✨\n\nSua proposta personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
+      const waLink = generateWhatsAppLink(savedProposal.clientPhone, msg);
+      window.open(waLink, "_blank", "noopener,noreferrer");
+    }
   };
 
   // Aprovação de proposta
@@ -205,9 +408,9 @@ export default function DashboardPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 rounded-full border-4 border-[#C59B27] border-t-transparent animate-spin" />
-        <p className="font-editorial text-[#5E372C] text-lg">Carregando Painel Operacional...</p>
+      <div className="min-h-screen bg-[#FCF5EB] flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 rounded-full border-4 border-[#C7A03A] border-t-transparent animate-spin" />
+        <p className="font-editorial text-[#1D3D3C] text-lg">Carregando Painel Operacional...</p>
       </div>
     );
   }
@@ -216,55 +419,85 @@ export default function DashboardPage() {
   const pendingPreReservationsCount = preReservations.filter((p) => p.status === "pending").length;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#33302C] flex">
+    <div className="min-h-screen bg-[#FCF5EB] text-[#1D3D3C] flex relative overflow-x-hidden">
+      {/* Grafismos Oficiais da Marca em Marca d'água no Fundo */}
+      <div className="fixed top-0 right-0 w-[440px] h-[440px] opacity-[0.08] pointer-events-none z-0">
+        <img
+          src="/brand/Grafismos/Linha grafismo 3.png"
+          alt=""
+          className="w-full h-full object-contain object-top-right"
+        />
+      </div>
+      <div className="fixed bottom-0 left-72 w-[380px] h-[380px] opacity-[0.05] pointer-events-none z-0 hidden lg:block">
+        <img
+          src="/brand/Grafismos/Linha grafismo 4.png"
+          alt=""
+          className="w-full h-full object-contain object-bottom-left"
+        />
+      </div>
+
       {/* Sidebar de Navegação Lateral */}
       <Sidebar
         currentTab={adminTab}
         onSelectTab={handleSelectTab}
-        onViewAsClient={() => router.push("/")}
         pendingTriageCount={pendingTriageCount}
         pendingPreReservationsCount={pendingPreReservationsCount}
+        role={role}
       />
 
       {/* Conteúdo Principal do Painel */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Barra de Topo / Header Principal */}
-        <header className="bg-white border-b border-[#E7DCCE] pl-16 pr-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-[#FAF7F2] border border-[#E7DCCE] flex items-center justify-center text-[#5E372C]">
-              <Building2 className="w-4 h-4 text-[#C59B27]" />
+        <header className="bg-white/95 backdrop-blur-md border-b border-[#D8D0BD] pl-14 sm:pl-8 pr-3 sm:pr-8 py-2.5 sm:py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-2 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[#C7A03A]/40 after:to-transparent">
+          <div data-tutorial="header-profile" className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-[#1D3D3C] border border-[#C7A03A]/40 flex items-center justify-center p-1.5 shrink-0 shadow-xs">
+              <img
+                src="/brand/Logotipo/Símbolo isolado/Símbolo dourado.svg"
+                alt=""
+                className="w-full h-full object-contain"
+              />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-sm text-[#2D1914]">
+            <div className="min-w-0 truncate">
+              <div className="flex items-center space-x-1.5 sm:space-x-2 truncate">
+                <span className="font-bold text-xs sm:text-sm text-[#1D3D3C] truncate font-sans">
                   {profile?.name || (user?.user_metadata?.name as string) || user?.email || "Gleicy Ronha"}
                 </span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/40 shrink-0">
                   {role === "super_admin"
                     ? "Super Admin"
                     : role === "salon_owner"
                     ? "Dona do Salão"
-                    : "Parceira"}
+                    : "Especialista Parceira"}
                 </span>
               </div>
-              <span className="text-[11px] text-[#7B493B]">
+              <span className="text-[10px] sm:text-[11px] text-[#736455] truncate block">
                 {profile?.specialty || "Espaço da Beleza Gleicy Ronha"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div data-tutorial="header-actions" className="flex items-center gap-2.5 sm:gap-3">
             {/* Status do Banco Supabase */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+            <div data-tutorial="header-status" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-[11px] font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Supabase Ativo</span>
+              <span>Sincronizado</span>
             </div>
+
+            {/* Botão de Tutorial & Guia do Sistema */}
+            <button
+              onClick={() => setIsTutorialHelpModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-[#FCF9F0] hover:bg-[#F5ECCF] text-[#80611F] border border-[#C7A03A]/50 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-2xs group"
+              title="Abrir Tutorial e Guia Completo do Sistema"
+            >
+              <GraduationCap className="w-4 h-4 text-[#C7A03A] group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">Tutorial & Guia</span>
+            </button>
 
             {/* Botão de Atualizar Dados */}
             <button
               onClick={refreshAll}
               disabled={isLoadingData}
-              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#F3ECE1] text-[#5E372C] border border-[#E7DCCE] transition-all"
+              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-[#EEE8DD] text-[#736455] border border-[#D8D0BD] transition-all"
               title="Recarregar Dados do Banco"
             >
               <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
@@ -273,7 +506,7 @@ export default function DashboardPage() {
             {/* Logout */}
             <button
               onClick={() => signOut().then(() => router.push("/login"))}
-              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-red-50 text-[#7B493B] hover:text-red-700 border border-[#E7DCCE] hover:border-red-200 transition-all"
+              className="p-2 rounded-xl bg-[#FAF7F2] hover:bg-red-50 text-[#736455] hover:text-red-700 border border-[#D8D0BD] hover:border-red-200 transition-all"
               title="Encerrar Sessão"
             >
               <LogOut className="w-4 h-4" />
@@ -283,14 +516,14 @@ export default function DashboardPage() {
 
         {/* Banner de Aviso de Modo Super Admin */}
         {role === "super_admin" && (
-          <div className="bg-[#2D1914] text-white px-4 sm:px-8 py-2 text-xs flex items-center justify-between">
+          <div className="bg-[#1D3D3C] text-white px-4 sm:px-8 py-2 text-xs flex items-center justify-between border-b border-[#C7A03A]/30">
             <div className="flex items-center space-x-2">
-              <Shield className="w-3.5 h-3.5 text-[#DBAE3B]" />
+              <Shield className="w-3.5 h-3.5 text-[#C7A03A]" />
               <span>Você está navegando com privilégios de Super Admin SaaS.</span>
             </div>
             <Link
               href="/saas-admin"
-              className="text-[#DBAE3B] hover:underline font-semibold text-[11px]"
+              className="text-[#C7A03A] hover:underline font-semibold text-[11px]"
             >
               Voltar ao Painel SaaS →
             </Link>
@@ -298,7 +531,7 @@ export default function DashboardPage() {
         )}
 
         {/* Área de Visualização Dinâmica das Abas */}
-        <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="flex-1 p-3 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
           {adminTab === "operacao" && (
             <DayOperationView
               appointments={appointments}
@@ -321,6 +554,7 @@ export default function DashboardPage() {
                 const prop = proposals.find((p) => p.id === propId);
                 if (prop) setViewingProposalModal(prop);
               }}
+              dailyTargetRevenue={organization?.settings?.dailyTargetRevenue || 1500}
             />
           )}
 
@@ -356,13 +590,59 @@ export default function DashboardPage() {
                   setNewAppointmentPrefill({
                     date: pr.requestedDate,
                     time: pr.preferredTime || (pr.preferredPeriod === "manha" ? "09:30" : "14:00"),
+                    clientName: pr.clientName,
+                    clientPhone: pr.clientPhone,
+                    serviceId: pr.serviceId,
+                    preReservationId: pr.id,
                   });
                   setIsNewAppointmentModalOpen(true);
                 }}
                 onViewTriage={(subId) => {
+                  setAdminTab("triagens");
                   const sub = triageSubmissions.find((s) => s.id === subId);
                   if (sub) {
                     setActiveSubmissionForProposal(sub);
+                  }
+                }}
+                onBuildProposal={(pr) => {
+                  setActivePreReservationForProposal(pr);
+                  const existingSub = pr.triageSubmissionId
+                    ? triageSubmissions.find((s) => s.id === pr.triageSubmissionId)
+                    : null;
+                  if (existingSub) {
+                    setActiveSubmissionForProposal(existingSub);
+                  } else {
+                    const mappedSub: TriageSubmission = {
+                      id: pr.triageSubmissionId || `sub-pr-${pr.id}`,
+                      orgId: pr.orgId,
+                      formId: "form-pr-custom",
+                      serviceId: pr.serviceId || "srv-custom",
+                      serviceTitle: pr.serviceName || "Atendimento Personalizado",
+                      clientName: pr.clientName,
+                      clientPhone: pr.clientPhone,
+                      clientEmail: pr.clientEmail || "",
+                      preferredDate: pr.requestedDate,
+                      preferredTimeSlot:
+                        pr.preferredTime ||
+                        (pr.preferredPeriod === "manha"
+                          ? "Encaixe (Manhã)"
+                          : pr.preferredPeriod === "tarde"
+                          ? "Encaixe (Tarde)"
+                          : "Encaixe (Flexível)"),
+                      answers: pr.adminNotes
+                        ? [
+                            {
+                              questionId: "notes",
+                              questionTitle: "Observações da Pré-Reserva",
+                              answerText: pr.adminNotes,
+                            },
+                          ]
+                        : [],
+                      photos: {},
+                      status: "pending_review",
+                      submittedAt: pr.createdAt || new Date().toISOString(),
+                    };
+                    setActiveSubmissionForProposal(mappedSub);
                   }
                 }}
               />
@@ -370,39 +650,20 @@ export default function DashboardPage() {
           )}
 
           {adminTab === "triagens" && (
-            <div className="space-y-8">
-              <TriageReviewQueue
-                submissions={triageSubmissions}
-                services={services}
-                onGenerateProposal={(proposal: LuxuryProposal) => {
-                  handleSaveProposal(proposal);
-                }}
-                onViewProposal={(propId: string) => {
-                  const prop = proposals.find((p) => p.id === propId);
-                  if (prop) setViewingProposalModal(prop);
-                }}
-              />
-              <div className="pt-2">
-                <PreReservationQueue
-                  orgId={organization?.id || "11111111-1111-4111-8111-111111111111"}
-                  professionalId={profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a"}
-                  dataService={SupabaseDataService}
-                  onConvertToAppointment={(pr) => {
-                    setNewAppointmentPrefill({
-                      date: pr.requestedDate,
-                      time: pr.preferredTime || (pr.preferredPeriod === "manha" ? "09:30" : "14:00"),
-                    });
-                    setIsNewAppointmentModalOpen(true);
-                  }}
-                  onViewTriage={(subId) => {
-                    const sub = triageSubmissions.find((s) => s.id === subId);
-                    if (sub) {
-                      setActiveSubmissionForProposal(sub);
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <TriageReviewQueue
+              submissions={triageSubmissions}
+              services={services}
+              proposals={proposals}
+              existingAppointments={appointments}
+              availableDays={availableDays}
+              onGenerateProposal={(proposal: LuxuryProposal, openWhatsApp?: boolean) => {
+                handleSaveProposal(proposal, openWhatsApp);
+              }}
+              onViewProposal={(propId: string) => {
+                const prop = proposals.find((p) => p.id === propId);
+                if (prop) setViewingProposalModal(prop);
+              }}
+            />
           )}
 
           {adminTab === "propostas" && (
@@ -459,6 +720,23 @@ export default function DashboardPage() {
               services={services}
             />
           )}
+
+          {adminTab === "configuracoes" && (
+            <SalonSettingsView
+              organization={organization}
+              profile={profile}
+              onUpdateOrganization={async (updatedOrg) => {
+                await SupabaseDataService.updateOrganization(updatedOrg);
+                await refreshAll();
+              }}
+              onUpdateProfile={async (updatedProf) => {
+                if (profile?.id) {
+                  await SupabaseDataService.updateUserProfile(profile.id, updatedProf);
+                  await refreshAll();
+                }
+              }}
+            />
+          )}
         </main>
       </div>
 
@@ -472,6 +750,9 @@ export default function DashboardPage() {
           clients={clients}
           prefilledDate={newAppointmentPrefill.date}
           prefilledTime={newAppointmentPrefill.time}
+          prefilledClientName={newAppointmentPrefill.clientName}
+          prefilledClientPhone={newAppointmentPrefill.clientPhone}
+          prefilledServiceId={newAppointmentPrefill.serviceId}
           onSave={handleSaveNewAppointment}
           onClose={() => setIsNewAppointmentModalOpen(false)}
         />
@@ -503,10 +784,17 @@ export default function DashboardPage() {
           }
           initialProposal={editingProposal}
           services={services}
-          onSave={handleSaveProposal}
+          preReservation={activePreReservationForProposal}
+          existingAppointments={appointments}
+          availableDays={availableDays}
+          onSave={(prop, openWA) => {
+            handleSaveProposal(prop, openWA);
+            setActivePreReservationForProposal(null);
+          }}
           onClose={() => {
             setActiveSubmissionForProposal(null);
             setEditingProposal(null);
+            setActivePreReservationForProposal(null);
           }}
         />
       )}
@@ -514,48 +802,90 @@ export default function DashboardPage() {
       {/* Modal Visualizador de Proposta para a Gleicy (Contido na Altura do Monitor) */}
       {viewingProposalModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-          <div className="bg-[#FAF7F2] rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-[#E7DCCE] overflow-hidden animate-scale-up">
-            <div className="p-4 sm:p-5 bg-white border-b border-[#E7DCCE] flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-[#AD841D] font-bold">
+          <div className="bg-[#FAF7F2] rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-[#D8D0BD] overflow-hidden animate-scale-up">
+            <div className="p-4 sm:p-5 brand-green-gradient text-white border-b border-[#C7A03A]/40 flex flex-wrap items-center justify-between gap-3 shrink-0 relative overflow-hidden">
+              {/* Pattern Gold Green sutil */}
+              <div className="absolute inset-0 bg-pattern-gold-green opacity-10 pointer-events-none" />
+
+              <div className="flex items-center gap-2 relative z-10">
+                <span className="text-xs uppercase tracking-wider text-[#D9B85F] font-extrabold">
                   Proposta Comercial
                 </span>
-                <span className="text-stone-300">•</span>
-                <span className="text-xs font-bold text-[#2D1914]">{viewingProposalModal.clientName}</span>
+                <span className="text-[#C7A03A]/60">•</span>
+                <span className="text-xs font-bold text-white">{viewingProposalModal.clientName}</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 relative z-10">
+                {viewingProposalModal.clientPhone && (
+                  <a
+                    href={generateWhatsAppLink(
+                      viewingProposalModal.clientPhone,
+                      `Olá, ${viewingProposalModal.clientName}! ✨\n\nSua proposta comercial personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${typeof window !== "undefined" ? window.location.origin : ""}/proposta/${viewingProposalModal.id}\n\nQualquer dúvida estou à disposição!`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-1.5 text-xs font-bold text-[#1D3D3C] gold-gradient hover:opacity-95 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                    title="Enviar proposta diretamente no WhatsApp da cliente"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 fill-[#1D3D3C]" />
+                    <span>Enviar no WhatsApp</span>
+                  </a>
+                )}
+
                 <button
                   onClick={() => {
                     const toEdit = viewingProposalModal;
                     setViewingProposalModal(null);
                     setEditingProposal(toEdit);
                   }}
-                  className="px-3 py-1.5 text-xs font-semibold text-[#5E372C] bg-[#FAF7F2] hover:bg-[#F3ECE1] border border-[#E7DCCE] rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
                 >
-                  <Edit3 className="w-3.5 h-3.5 text-[#AD841D]" />
-                  <span>Editar Proposta</span>
+                  <Edit3 className="w-3.5 h-3.5 text-[#D9B85F]" />
+                  <span>Editar</span>
                 </button>
 
                 <a
                   href={`/proposta/${viewingProposalModal.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 text-xs font-semibold text-[#2D1914] bg-white hover:bg-stone-50 border border-[#E7DCCE] rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl flex items-center gap-1.5 transition-all shadow-2xs"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-[#C59B27]" />
-                  <span>Abrir Página Web da Cliente</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-[#D9B85F]" />
+                  <span>Ver Página Web</span>
                 </a>
 
                 <button
                   onClick={() => setViewingProposalModal(null)}
-                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 transition-colors"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-white transition-colors"
                   title="Fechar visualização"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            {viewingProposalModal.clientPhone && (
+              <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900 shrink-0">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    Proposta pronta para envio para <strong>{viewingProposalModal.clientName}</strong> ({viewingProposalModal.clientPhone}).
+                  </span>
+                </div>
+                <a
+                  href={generateWhatsAppLink(
+                    viewingProposalModal.clientPhone,
+                    `Olá, ${viewingProposalModal.clientName}! ✨\n\nSua proposta personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${typeof window !== "undefined" ? window.location.origin : ""}/proposta/${viewingProposalModal.id}\n\nQualquer dúvida estou à disposição!`
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-white hover:bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-200 transition-colors shadow-2xs"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
+                  <span>Abrir conversa no WhatsApp &rarr;</span>
+                </a>
+              </div>
+            )}
 
             <div className="overflow-y-auto flex-1 p-3 sm:p-6">
               <LuxuryProposalPDF
@@ -576,6 +906,25 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Motor de Tour Guiado Interativo (Holofote) */}
+      <InteractiveTutorialTour
+        steps={TUTORIAL_STEPS}
+        currentStepIndex={tutorialStepIndex}
+        isOpen={isTutorialTourOpen}
+        onNext={() => setTutorialStepIndex((prev) => Math.min(prev + 1, TUTORIAL_STEPS.length - 1))}
+        onPrev={() => setTutorialStepIndex((prev) => Math.max(prev - 1, 0))}
+        onSkip={handleSkipTutorialTour}
+        onComplete={handleCompleteTutorialTour}
+        onSelectTab={(tab) => handleSelectTab(tab as AdminTab)}
+      />
+
+      {/* Central de Treinamento & Manual Completo */}
+      <TutorialHelpModal
+        isOpen={isTutorialHelpModalOpen}
+        onClose={() => setIsTutorialHelpModalOpen(false)}
+        onStartInteractiveTour={handleStartTourFromBeginning}
+      />
     </div>
   );
 }

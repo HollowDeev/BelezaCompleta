@@ -14,6 +14,7 @@ import {
   Edit3,
   TrendingUp,
   Percent,
+  MessageCircle,
 } from "lucide-react";
 
 interface ProposalsManagerViewProps {
@@ -44,40 +45,50 @@ export function ProposalsManagerView({
   const conversionRate = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6">
+    <div data-tutorial="proposals-manager" className="bg-white/85 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-[#D8D0BD] shadow-xs space-y-6 relative overflow-hidden">
       {/* Topo da Gestão de Propostas */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E7DCCE]/60 pb-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#D8D0BD]/70 pb-5">
         <div>
-          <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold block">
+          <span className="text-[10px] uppercase tracking-widest text-[#80611F] font-bold block">
             Central Comercial Gleicy Ronha
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#2D1914]">
+
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1D3D3C] font-sans">
             Propostas Comerciais Personalizadas
           </h2>
+
+          {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+          <div className="relative w-36 sm:w-44 h-2.5 my-1.5 opacity-80 pointer-events-none">
+            <img
+              src="/brand/Grafismos/Linha grafismo 1.png"
+              alt=""
+              className="w-full h-full object-contain object-left"
+            />
+          </div>
         </div>
 
         {/* Indicadores Comerciais Rápidos */}
-        <div className="flex items-center gap-3 bg-[#FAF7F2] p-1.5 px-3 rounded-2xl border border-[#E7DCCE]">
+        <div className="flex items-center gap-3 bg-[#FAF7F2] p-1.5 px-3 rounded-2xl border border-[#D8D0BD]">
           <div className="text-center px-2">
-            <span className="text-[10px] text-stone-500 uppercase font-semibold block">Total</span>
-            <span className="text-xs font-bold text-[#2D1914]">{totalCount}</span>
+            <span className="text-[10px] text-[#736455] uppercase font-semibold block">Total</span>
+            <span className="text-xs font-bold text-[#1D3D3C]">{totalCount}</span>
           </div>
-          <div className="h-6 w-px bg-[#E7DCCE]" />
+          <div className="h-6 w-px bg-[#D8D0BD]" />
           <div className="text-center px-2">
-            <span className="text-[10px] text-emerald-700 uppercase font-semibold block">Aprovadas</span>
+            <span className="text-[10px] text-emerald-800 uppercase font-semibold block">Aprovadas</span>
             <span className="text-xs font-bold text-emerald-800">{approvedCount}</span>
           </div>
-          <div className="h-6 w-px bg-[#E7DCCE]" />
+          <div className="h-6 w-px bg-[#D8D0BD]" />
           <div className="text-center px-2">
-            <span className="text-[10px] text-[#AD841D] uppercase font-semibold block">Conversão</span>
-            <span className="text-xs font-bold text-[#AD841D]">{conversionRate}%</span>
+            <span className="text-[10px] text-[#80611F] uppercase font-semibold block">Conversão</span>
+            <span className="text-xs font-bold text-[#80611F]">{conversionRate}%</span>
           </div>
         </div>
       </div>
 
       {/* LISTAGEM DE PROPOSTAS */}
       {proposals.length === 0 ? (
-        <div className="py-12 text-center text-xs text-stone-500 bg-[#FAF7F2] rounded-2xl border border-dashed border-[#E7DCCE]">
+        <div className="py-12 text-center text-xs text-[#736455] bg-[#FAF7F2] rounded-2xl border border-dashed border-[#D8D0BD]">
           Nenhuma proposta comercial gerada ainda. Acesse a <strong>Fila de Triagens</strong> para criar propostas para clientes que responderam ao questionário.
         </div>
       ) : (
@@ -86,47 +97,47 @@ export function ProposalsManagerView({
             const isApproved = prop.status === "approved";
             const origin = typeof window !== "undefined" ? window.location.origin : "";
             const proposalUrl = `${origin}/proposta/${prop.id}`;
-            const shareText = `Olá, ${prop.clientName}! Segue sua Proposta Personalizada da Gleicy Ronha: ${proposalUrl}`;
+            const shareText = `Olá, ${prop.clientName}! ✨\n\nSua proposta comercial personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
             const whatsappUrl = generateWhatsAppLink(prop.clientPhone, shareText);
 
             return (
               <div
                 key={prop.id}
-                className="p-5 sm:p-6 rounded-2xl border border-[#E7DCCE] bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-all flex flex-col justify-between shadow-2xs"
+                className="p-5 sm:p-6 rounded-2xl border border-[#D8D0BD] bg-[#FCF5EB]/60 hover:bg-[#FCF5EB] transition-all flex flex-col justify-between shadow-2xs hover:border-[#C7A03A]"
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-base text-[#2D1914]">{prop.clientName}</span>
+                    <span className="font-bold text-base text-[#1D3D3C]">{prop.clientName}</span>
                     {isApproved ? (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                         Aprovada ✓
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/50">
                         Aguardando Aceite
                       </span>
                     )}
                   </div>
 
-                  <p className="text-xs font-semibold text-[#5E372C] mb-1">{prop.subtitle}</p>
-                  <p className="text-[11px] text-stone-600 line-clamp-2 mb-4 leading-relaxed">
+                  <p className="text-xs font-semibold text-[#80611F] mb-1">{prop.subtitle}</p>
+                  <p className="text-[11px] text-[#736455] line-clamp-2 mb-4 leading-relaxed">
                     {prop.projectOverview}
                   </p>
 
                   {/* Resumo de Valores */}
-                  <div className="p-3.5 rounded-xl bg-white border border-[#E7DCCE] flex items-center justify-between text-xs mb-4">
+                  <div className="p-3.5 rounded-xl bg-white border border-[#D8D0BD] flex items-center justify-between text-xs mb-4">
                     <div>
-                      <span className="text-stone-500 text-[11px] block">Condição Especial:</span>
-                      <span className="font-bold text-sm text-[#2D1914]">
+                      <span className="text-[#736455] text-[11px] block">Condição Especial:</span>
+                      <span className="font-bold text-sm text-[#1D3D3C]">
                         {formatBRL(prop.totalWithDiscount)}
                       </span>
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] uppercase font-bold text-[#AD841D] block">
+                      <span className="text-[10px] uppercase font-bold text-[#80611F] block">
                         No Pix à vista:
                       </span>
-                      <span className="font-bold text-sm text-emerald-700">
+                      <span className="font-bold text-sm text-emerald-800">
                         {formatBRL(prop.pixTotal)}
                       </span>
                     </div>
@@ -134,23 +145,23 @@ export function ProposalsManagerView({
                 </div>
 
                 {/* Ações da Proposta */}
-                <div className="pt-3 border-t border-[#E7DCCE]/60 flex flex-wrap items-center justify-between gap-2">
+                <div className="pt-3 border-t border-[#D8D0BD]/70 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onViewProposal(prop.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white chocolate-gradient rounded-xl flex items-center space-x-1 shadow-xs hover:opacity-95"
+                      className="px-3 py-1.5 text-xs font-bold text-white brand-green-gradient border border-[#C7A03A]/40 rounded-xl flex items-center space-x-1 shadow-xs hover:opacity-95"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-[#DBAE3B]" />
-                      <span>Ver Proposta & PDF</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-[#D9B85F]" />
+                      <span>Ver Proposta &amp; PDF</span>
                     </button>
 
                     {onEditProposal && (
                       <button
                         onClick={() => onEditProposal(prop)}
-                        className="px-3 py-1.5 text-xs font-semibold text-[#5E372C] bg-white hover:bg-[#F3ECE1] border border-[#E7DCCE] rounded-xl flex items-center space-x-1 transition-all"
+                        className="px-3 py-1.5 text-xs font-semibold text-[#1D3D3C] bg-white hover:bg-[#EEE8DD] border border-[#D8D0BD] rounded-xl flex items-center space-x-1 transition-all"
                         title="Editar valores, módulos ou mensagens desta proposta"
                       >
-                        <Edit3 className="w-3.5 h-3.5 text-[#AD841D]" />
+                        <Edit3 className="w-3.5 h-3.5 text-[#C7A03A]" />
                         <span>Editar</span>
                       </button>
                     )}
@@ -171,10 +182,11 @@ export function ProposalsManagerView({
                       href={whatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                      title="Reenviar pelo WhatsApp"
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs"
+                      title="Enviar proposta diretamente no WhatsApp"
                     >
-                      <Share2 className="w-3.5 h-3.5" />
+                      <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                      <span>WhatsApp</span>
                     </a>
 
                     <button

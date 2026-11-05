@@ -19,7 +19,20 @@ import {
   DollarSign,
   AlertCircle,
   HelpCircle,
+  UploadCloud,
+  Image as ImageIcon,
+  CheckCircle2,
+  Check,
 } from "lucide-react";
+
+const SALON_PRESET_IMAGES = [
+  { url: "/brand/Carrossel_Fotos/1.webp", label: "Mechas & Iluminado Dourado" },
+  { url: "/brand/Carrossel_Fotos/2.webp", label: "Corte em Camadas Crespas" },
+  { url: "/brand/Carrossel_Fotos/3.webp", label: "Cachos Definidos & Volume" },
+  { url: "/brand/Carrossel_Fotos/4.webp", label: "Iluminado Mel Quente" },
+  { url: "/brand/Carrossel_Fotos/5.webp", label: "Terapia & Tratamento Intensivo" },
+  { url: "/brand/Carrossel_Fotos/6.webp", label: "Morena Iluminada Avelã" },
+];
 
 interface ServiceEditorModalProps {
   service?: ServiceItem | null; // se fornecido, é modo edição; se null, é criação
@@ -55,12 +68,63 @@ export function ServiceEditorModal({
   const [promotionalPrice, setPromotionalPrice] = useState<string>(
     service?.promotionalPrice ? String(service.promotionalPrice) : ""
   );
+  const [imageUrl, setImageUrl] = useState<string>(service?.imageUrl || "");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [requiresTriage, setRequiresTriage] = useState<boolean>(
     service?.requiresTriage ?? true
   );
   const [triageFormId, setTriageFormId] = useState<string>(
     service?.triageFormId || (triageForms[0]?.id ?? "")
   );
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMsg("Selecione um arquivo de imagem válido (JPG, PNG ou WEBP).");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          setImageUrl(compressedDataUrl);
+          setErrorMsg(null);
+        }
+        setIsUploadingImage(false);
+      };
+      img.onerror = () => {
+        setErrorMsg("Erro ao processar imagem.");
+        setIsUploadingImage(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setErrorMsg("Erro ao ler o arquivo de imagem.");
+      setIsUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Estados das Etapas do Procedimento
   const [steps, setSteps] = useState<ServiceStep[]>(
@@ -165,6 +229,10 @@ export function ServiceEditorModal({
       setErrorMsg("Informe o nome do serviço.");
       return;
     }
+    if (!imageUrl || !imageUrl.trim()) {
+      setErrorMsg("A foto/imagem ilustrativa do serviço é obrigatória para exibição no catálogo do site.");
+      return;
+    }
     if (price <= 0) {
       setErrorMsg("O valor do serviço deve ser maior que zero.");
       return;
@@ -197,6 +265,7 @@ export function ServiceEditorModal({
         description: description.trim(),
         price: Number(price),
         promotionalPrice: promotionalPrice ? Number(promotionalPrice) : undefined,
+        imageUrl: imageUrl.trim(),
         requiresTriage,
         triageFormId: requiresTriage ? triageFormId : undefined,
         isActive: service?.isActive ?? true,
@@ -424,6 +493,149 @@ export function ServiceEditorModal({
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7DCCE] text-xs font-medium outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
                 />
+              </div>
+
+              {/* Foto Ilustrativa do Serviço (OBRIGATÓRIO) */}
+              <div className="sm:col-span-2 pt-2 border-t border-[#E7DCCE]/60 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div>
+                    <label className="block text-xs font-bold text-[#2D1914] flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-[#AD841D]" />
+                      <span>Imagem de Destaque do Serviço (Vitrine)</span>
+                      <span className="text-rose-600 font-extrabold text-xs">* Obrigatória</span>
+                    </label>
+                    <p className="text-[11px] text-stone-500">
+                      Esta foto é exibida com destaque para as clientes no catálogo do site. Faça upload de uma foto ou escolha uma do salão.
+                    </p>
+                  </div>
+
+                  {imageUrl && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Imagem Definida
+                    </span>
+                  )}
+                </div>
+
+                {/* Preview ou Dropzone */}
+                {imageUrl ? (
+                  <div className="relative rounded-2xl border border-[#E7DCCE] overflow-hidden bg-stone-100 group shadow-2xs">
+                    <div className="relative h-48 sm:h-56 w-full">
+                      <img
+                        src={imageUrl}
+                        alt="Preview do Serviço"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <div className="text-white text-xs font-semibold drop-shadow-sm flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#DBAE3B]" />
+                        <span>Destaque na vitrine do cliente</span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <label
+                          htmlFor="service-image-upload-input"
+                          className="px-3 py-1.5 rounded-xl bg-white/95 hover:bg-white text-[#2D1914] text-xs font-bold cursor-pointer transition-all shadow-sm flex items-center gap-1"
+                        >
+                          <UploadCloud className="w-3.5 h-3.5 text-[#AD841D]" />
+                          <span>Trocar Foto</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setImageUrl("")}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remover</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="service-image-upload-input"
+                    className="cursor-pointer border-2 border-dashed border-[#AD841D]/40 hover:border-[#AD841D] rounded-2xl p-6 sm:p-7 flex flex-col items-center justify-center text-center bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl chocolate-gradient flex items-center justify-center text-[#DBAE3B] mb-2 shadow-xs group-hover:scale-105 transition-transform">
+                      {isUploadingImage ? (
+                        <Clock className="w-6 h-6 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-6 h-6" />
+                      )}
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-[#2D1914] mb-0.5">
+                      {isUploadingImage ? "Otimizando imagem..." : "Clique para enviar a foto do serviço"}
+                    </span>
+                    <span className="text-[11px] text-stone-500 max-w-sm mb-2">
+                      Foto do seu dispositivo (JPG, PNG, WEBP). Será otimizada para carregar com máxima nitidez.
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-white border border-[#E7DCCE] text-xs font-bold text-[#AD841D] shadow-2xs group-hover:border-[#AD841D]">
+                      <Plus className="w-3.5 h-3.5" />
+                      Escolher Imagem
+                    </span>
+                  </label>
+                )}
+
+                <input
+                  id="service-image-upload-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                {/* Seleção Rápida da Galeria Oficial do Salão */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold uppercase tracking-wider text-[#5E372C]">
+                      Ou selecione das fotos oficiais do portfólio:
+                    </span>
+                    <span className="text-stone-400">
+                      Clique para aplicar
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {SALON_PRESET_IMAGES.map((preset, pIdx) => {
+                      const isSelected = imageUrl === preset.url;
+                      return (
+                        <button
+                          key={preset.url}
+                          type="button"
+                          onClick={() => {
+                            setImageUrl(preset.url);
+                            setErrorMsg(null);
+                          }}
+                          className={`group relative rounded-xl overflow-hidden border-2 transition-all aspect-square ${
+                            isSelected
+                              ? "border-[#AD841D] ring-2 ring-[#AD841D]/30 scale-102 shadow-xs"
+                              : "border-[#E7DCCE] hover:border-[#AD841D]/60 opacity-80 hover:opacity-100"
+                          }`}
+                          title={preset.label}
+                        >
+                          <img
+                            src={preset.url}
+                            alt={preset.label}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          {isSelected && (
+                            <div className="absolute inset-0 bg-[#AD841D]/40 flex items-center justify-center">
+                              <div className="w-5 h-5 rounded-full bg-[#AD841D] text-white flex items-center justify-center shadow-xs">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            </div>
+                          )}
+                          <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white font-medium py-0.5 truncate px-1 text-center">
+                            Foto {pIdx + 1}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

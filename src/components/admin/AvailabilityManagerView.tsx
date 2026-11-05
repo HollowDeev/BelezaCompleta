@@ -44,8 +44,18 @@ export function AvailabilityManagerView({
   appointments = [],
   onOpenPreReservations,
 }: AvailabilityManagerViewProps) {
-  // Navegação de Mês/Ano (inicializado em Outubro 2026, conforme padrão do projeto)
-  const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 10 });
+  // Navegação de Mês/Ano (sincronizado dinamicamente em relação ao mês e ano atuais)
+  const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 11 });
+  const [todayStr, setTodayStr] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    setCurrentYearMonth({ year: y, month: m });
+    setTodayStr(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }, []);
   const [availableDays, setAvailableDays] = useState<AvailableDay[]>([]);
   const [templates, setTemplates] = useState<AvailabilityTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -139,10 +149,8 @@ export function AvailabilityManagerView({
   };
 
   const handleGoToday = () => {
-    // Default para 2026 se estivermos no escopo do projeto
-    const y = 2026;
-    const m = 10;
-    setCurrentYearMonth({ year: y, month: m });
+    const now = new Date();
+    setCurrentYearMonth({ year: now.getFullYear(), month: now.getMonth() + 1 });
     setSelectedDates(new Set());
     setActiveDayMenu(null);
   };
@@ -398,24 +406,27 @@ export function AvailabilityManagerView({
   };
 
   return (
-    <div className="bg-[#1A0F0C] rounded-3xl p-5 sm:p-8 border border-[#5E372C]/50 shadow-2xl text-stone-100 space-y-8 relative overflow-hidden">
+    <div className="bg-white/85 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3.5 sm:p-8 border border-[#D8D0BD] shadow-xs text-[#1D3D3C] space-y-6 sm:space-y-8 relative overflow-hidden">
+      {/* Pattern de Arcos de Oliva sutil ao fundo */}
+      <div className="absolute inset-0 bg-pattern-arches-olive opacity-[0.03] pointer-events-none" />
+
       {/* Toast de Notificação Inline */}
       {toastMessage && (
         <div
-          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center space-x-3 text-sm font-semibold transition-all duration-300 animate-slide-up ${
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-xl border flex items-center space-x-3 text-sm font-semibold transition-all duration-300 animate-slide-up ${
             toastMessage.type === "success"
-              ? "bg-[#2D1914] text-amber-200 border-[#DBAE3B]/60 shadow-amber-950/40"
+              ? "bg-[#1D3D3C] text-[#FCF5EB] border-[#C7A03A]/60 shadow-[#1D3D3C]/30"
               : toastMessage.type === "error"
-              ? "bg-red-950 text-red-200 border-red-600/80 shadow-red-950/50"
-              : "bg-stone-900 text-stone-200 border-stone-700 shadow-black/60"
+              ? "bg-red-950 text-red-100 border-red-500 shadow-red-950/40"
+              : "bg-[#FCF5EB] text-[#1D3D3C] border-[#D8D0BD] shadow-black/20"
           }`}
         >
           {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-[#DBAE3B] shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-[#D9B85F] shrink-0" />
           ) : toastMessage.type === "error" ? (
             <XCircle className="w-5 h-5 text-red-400 shrink-0" />
           ) : (
-            <Info className="w-5 h-5 text-amber-400 shrink-0" />
+            <Info className="w-5 h-5 text-[#80611F] shrink-0" />
           )}
           <span>{toastMessage.text}</span>
         </div>
@@ -424,40 +435,50 @@ export function AvailabilityManagerView({
       {/* ============================================================== */}
       {/* ZONA 1 — CABEÇALHO + CONTROLES DO MÊS + ESTATÍSTICAS + LEGENDA */}
       {/* ============================================================== */}
-      <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-[#5E372C]/40">
+      <div className="space-y-6 relative z-10">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-[#D8D0BD]">
           <div>
-            <div className="flex items-center space-x-2 text-[11px] uppercase font-extrabold tracking-widest text-[#DBAE3B] mb-2">
-              <CalendarCheck className="w-4 h-4 text-[#DBAE3B]" />
+            <div className="flex items-center space-x-2 text-[11px] uppercase font-extrabold tracking-widest text-[#80611F] mb-1.5">
+              <CalendarCheck className="w-4 h-4 text-[#C7A03A]" />
               <span>Gestão de Disponibilidade • Gleicy Ronha</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1D3D3C] flex items-center gap-3">
               <span>Abertura de Agenda</span>
-              <span className="text-xs px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 font-semibold">
+              <span className="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold">
                 {monthStats.totalOpen} dias abertos
               </span>
             </h1>
-            <p className="text-xs sm:text-sm text-stone-400 max-w-2xl mt-1.5 leading-relaxed">
+
+            {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
+            <div className="relative w-36 sm:w-44 h-2.5 my-1.5 opacity-80 pointer-events-none">
+              <img
+                src="/brand/Grafismos/Linha grafismo 1.png"
+                alt=""
+                className="w-full h-full object-contain object-left"
+              />
+            </div>
+
+            <p className="text-xs sm:text-sm text-[#736455] max-w-2xl mt-1 leading-relaxed">
               Defina os dias e turnos em que você atenderá clientes no Espaço da Beleza. As clientes só conseguirão agendar online nos dias que você liberar aqui.
             </p>
           </div>
 
           {/* Navegação entre Meses */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center bg-stone-900/90 rounded-2xl border border-stone-800 p-1">
+            <div className="flex items-center bg-[#FAF7F2] rounded-2xl border border-[#D8D0BD] p-1 shadow-xs">
               <button
                 onClick={handlePrevMonth}
-                className="p-2.5 rounded-xl hover:bg-stone-800 text-stone-300 hover:text-white transition-colors"
+                className="p-2.5 rounded-xl hover:bg-[#FCF5EB] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
                 title="Mês Anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="px-4 text-sm font-bold text-stone-100 min-w-[140px] text-center">
+              <span className="px-4 text-sm font-bold text-[#1D3D3C] min-w-[140px] text-center">
                 {monthNames[currentYearMonth.month - 1]} {currentYearMonth.year}
               </span>
               <button
                 onClick={handleNextMonth}
-                className="p-2.5 rounded-xl hover:bg-stone-800 text-stone-300 hover:text-white transition-colors"
+                className="p-2.5 rounded-xl hover:bg-[#FCF5EB] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
                 title="Próximo Mês"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -466,7 +487,7 @@ export function AvailabilityManagerView({
 
             <button
               onClick={handleGoToday}
-              className="px-3.5 py-2.5 rounded-2xl bg-stone-900 hover:bg-stone-800 border border-[#5E372C]/60 text-xs font-bold text-[#DBAE3B] transition-all hover:border-[#DBAE3B]/40 active:scale-95"
+              className="px-3.5 py-2.5 rounded-2xl bg-[#1D3D3C] hover:bg-[#1D3D3C]/90 border border-[#C7A03A]/40 text-xs font-bold text-[#D9B85F] transition-all hover:border-[#C7A03A] shadow-xs active:scale-95"
             >
               Hoje
             </button>
@@ -474,38 +495,38 @@ export function AvailabilityManagerView({
             <button
               onClick={loadMonthData}
               disabled={isLoading}
-              className="p-2.5 rounded-2xl bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white transition-all"
+              className="p-2.5 rounded-2xl bg-[#FAF7F2] hover:bg-[#FCF5EB] border border-[#D8D0BD] text-[#736455] hover:text-[#1D3D3C] transition-all shadow-xs"
               title="Recarregar Disponibilidade"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[#DBAE3B]" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[#C7A03A]" : ""}`} />
             </button>
           </div>
         </div>
 
         {/* Barra de Ações Rápidas de Seleção e Estatísticas */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-stone-950/60 p-4 rounded-2xl border border-stone-800/80">
+        <div data-tutorial="abertura-batch-actions" className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#FCF5EB]/80 p-4 rounded-2xl border border-[#D8D0BD]">
           {/* Botões de Ação de Seleção Rápida */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-stone-400 mr-1 flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-[#DBAE3B]" />
+            <span className="text-xs font-semibold text-[#736455] mr-1 flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-[#C7A03A]" />
               <span>Seleção rápida:</span>
             </span>
             <button
               onClick={selectTuesdayToSaturday}
-              className="px-3 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700/90 border border-stone-700 text-xs font-semibold text-stone-200 transition-all hover:border-stone-500"
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
             >
               📅 Terça a Sábado
             </button>
             <button
               onClick={selectAllMonth}
-              className="px-3 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700/90 border border-stone-700 text-xs font-semibold text-stone-200 transition-all hover:border-stone-500"
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
             >
               🗓️ Todo o Mês
             </button>
             {selectedDates.size > 0 && (
               <button
                 onClick={clearSelection}
-                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 border border-red-900/60 text-xs font-semibold text-red-300 transition-all"
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-red-50 border border-red-200 text-xs font-semibold text-red-600 transition-all shadow-xs"
               >
                 ✕ Limpar ({selectedDates.size})
               </button>
@@ -515,24 +536,24 @@ export function AvailabilityManagerView({
           {/* Legenda de Cores */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center space-x-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-stone-800 border border-stone-700 inline-block" />
-              <span className="text-stone-400">Fechado</span>
+              <span className="w-3.5 h-3.5 rounded-md bg-[#FAF7F2] border border-[#D8D0BD] inline-block" />
+              <span className="text-[#736455]">Fechado</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-emerald-950 border border-emerald-500 inline-block" />
-              <span className="text-stone-300">Aberto</span>
+              <span className="w-3.5 h-3.5 rounded-md bg-emerald-50 border border-emerald-400 inline-block" />
+              <span className="text-[#1D3D3C]">Aberto</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-amber-950 border border-amber-500 inline-block" />
-              <span className="text-stone-300">&gt;70% Ocupado</span>
+              <span className="w-3.5 h-3.5 rounded-md bg-amber-50 border border-amber-400 inline-block" />
+              <span className="text-[#1D3D3C]">&gt;70% Ocupado</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-red-950 border border-red-500 inline-block" />
-              <span className="text-stone-300">Lotado</span>
+              <span className="w-3.5 h-3.5 rounded-md bg-red-50 border border-red-400 inline-block" />
+              <span className="text-[#1D3D3C]">Lotado</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-[#2D1914] border-2 border-[#DBAE3B] inline-block ring-1 ring-[#DBAE3B]/40" />
-              <span className="text-[#DBAE3B] font-semibold">Hoje / Selecionado</span>
+              <span className="w-3.5 h-3.5 rounded-md bg-[#1D3D3C] border-2 border-[#C7A03A] inline-block ring-1 ring-[#C7A03A]/40" />
+              <span className="text-[#80611F] font-semibold">Hoje / Selecionado</span>
             </div>
           </div>
         </div>
@@ -541,16 +562,16 @@ export function AvailabilityManagerView({
       {/* ============================================================== */}
       {/* ZONA 2 — GRID CALENDÁRIO MENSAL INTERATIVO                     */}
       {/* ============================================================== */}
-      <div className="space-y-3">
+      <div data-tutorial="abertura-calendar-grid" className="space-y-3 relative z-10">
         {/* Dias da Semana (Dom a Sáb) */}
-        <div className="grid grid-cols-7 gap-2 sm:gap-3 text-center text-xs font-bold text-[#DBAE3B] tracking-wider uppercase mb-1">
-          <span className="p-2 rounded-xl bg-stone-900/40 text-stone-500">Dom</span>
-          <span className="p-2 rounded-xl bg-stone-900/40">Seg</span>
-          <span className="p-2 rounded-xl bg-stone-900/40">Ter</span>
-          <span className="p-2 rounded-xl bg-stone-900/40">Qua</span>
-          <span className="p-2 rounded-xl bg-stone-900/40">Qui</span>
-          <span className="p-2 rounded-xl bg-stone-900/40">Sex</span>
-          <span className="p-2 rounded-xl bg-stone-900/40 text-stone-400">Sáb</span>
+        <div className="grid grid-cols-7 gap-2 sm:gap-3 text-center text-xs font-bold text-[#80611F] tracking-wider uppercase mb-1">
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]/70">Dom</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Seg</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Ter</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Qua</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Qui</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Sex</span>
+          <span className="p-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/40 text-[#736455]">Sáb</span>
         </div>
 
         {/* Grid de Dias */}
@@ -559,7 +580,7 @@ export function AvailabilityManagerView({
           {[...Array(startDayOffset)].map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="h-28 sm:h-32 rounded-xl bg-stone-950/20 border border-stone-900/30 pointer-events-none"
+              className="h-20 xs:h-24 sm:h-32 rounded-xl bg-[#FAF7F2]/40 border border-[#D8D0BD]/40 pointer-events-none"
             />
           ))}
 
@@ -575,11 +596,7 @@ export function AvailabilityManagerView({
             const isSelected = selectedDates.has(dateStr);
 
             // Verificação de data atual (Hoje)
-            const isToday =
-              dateStr ===
-              `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(
-                new Date().getDate()
-              ).padStart(2, "0")}` || dateStr === "2026-10-28";
+            const isToday = Boolean(todayStr && dateStr === todayStr);
 
             // Ocupação do Dia
             const clientCount = appointmentsCountMap.get(dateStr) || 0;
@@ -589,44 +606,46 @@ export function AvailabilityManagerView({
             const isHighOccupation = isOpen && !isFull && occupationRatio >= 0.7;
 
             // Determinar estilo de fundo e borda baseado no estado
-            let statusClasses = "bg-stone-800 border-stone-700 text-stone-400 hover:border-stone-500";
+            let statusClasses = "bg-[#FAF7F2] border-[#D8D0BD] text-[#736455] hover:border-[#C7A03A]/60 shadow-xs";
 
             if (isOpen) {
               if (isFull) {
                 // Vermelho: Lotado
-                statusClasses = "bg-red-950/80 border-red-600 text-red-200 hover:border-red-400";
+                statusClasses = "bg-red-50/90 border-red-300 text-red-950 hover:border-red-500 shadow-xs";
               } else if (isHighOccupation) {
                 // Âmbar: >70%
-                statusClasses = "bg-amber-950/80 border-amber-600 text-amber-200 hover:border-amber-400";
+                statusClasses = "bg-amber-50/90 border-amber-300 text-amber-950 hover:border-amber-500 shadow-xs";
               } else {
                 // Verde: Aberto com horário
-                statusClasses = "bg-emerald-950/80 border-emerald-500 text-emerald-200 hover:border-emerald-400";
+                statusClasses = "bg-emerald-50/90 border-emerald-300 text-emerald-950 hover:border-emerald-500 shadow-xs";
               }
             }
 
             if (isSelected) {
-              statusClasses = "bg-[#2D1914] border-[#DBAE3B] text-stone-100 ring-2 ring-[#DBAE3B] shadow-lg shadow-amber-950/60 scale-[1.02]";
+              statusClasses = "bg-[#1D3D3C] border-[#C7A03A] text-white ring-2 ring-[#C7A03A] shadow-md shadow-[#1D3D3C]/20 scale-[1.02]";
             }
 
             if (isToday && !isSelected) {
-              statusClasses += " ring-2 ring-[#DBAE3B]/70 border-[#DBAE3B]";
+              statusClasses += " ring-2 ring-[#C7A03A]/70 border-[#C7A03A]";
             }
 
             return (
               <div
                 key={dateStr}
                 onClick={() => toggleDateSelection(dateStr)}
-                className={`relative h-28 sm:h-32 p-2.5 rounded-xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between select-none group ${statusClasses}`}
+                className={`relative h-20 xs:h-24 sm:h-32 p-1.5 sm:p-2.5 rounded-xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between select-none group ${statusClasses}`}
               >
                 {/* Topo do Card: Número do Dia + Indicador de Seleção / Menu */}
                 <div className="flex items-center justify-between">
                   <span
-                    className={`text-xs font-black w-6 h-6 rounded-full flex items-center justify-center transition-transform ${
+                    className={`text-xs font-black w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center transition-transform ${
                       isSelected
-                        ? "bg-[#DBAE3B] text-[#1A0F0C] font-black"
+                        ? "bg-[#C7A03A] text-[#1D3D3C] font-black"
                         : isToday
-                        ? "bg-[#DBAE3B]/30 text-[#DBAE3B] border border-[#DBAE3B]/60"
-                        : "text-stone-300 group-hover:text-white"
+                        ? "bg-[#C7A03A]/20 text-[#80611F] border border-[#C7A03A]/60 font-bold"
+                        : isOpen
+                        ? "text-[#1D3D3C] group-hover:text-[#80611F] font-bold"
+                        : "text-[#736455] group-hover:text-[#1D3D3C]"
                     }`}
                   >
                     {dayNum}
@@ -634,8 +653,8 @@ export function AvailabilityManagerView({
 
                   {/* Indicador de Seleção Ativa */}
                   {isSelected ? (
-                    <span className="w-5 h-5 rounded-full bg-[#DBAE3B] text-[#1A0F0C] flex items-center justify-center text-[10px] font-black shadow-xs">
-                      <Check className="w-3 h-3 stroke-[3]" />
+                    <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#C7A03A] text-[#1D3D3C] flex items-center justify-center text-[9px] sm:text-[10px] font-black shadow-xs">
+                      <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[3]" />
                     </span>
                   ) : isOpen ? (
                     // Menu rápido de Ação para Dia Aberto
@@ -649,30 +668,30 @@ export function AvailabilityManagerView({
                           setActiveDayMenu({ dateStr, dayObj: dayObj! });
                         }
                       }}
-                      className="w-5 h-5 rounded-md hover:bg-stone-700/60 flex items-center justify-center text-stone-300 hover:text-white transition-colors"
+                      className="w-4 h-4 sm:w-5 sm:h-5 rounded-md hover:bg-[#FCF5EB] flex items-center justify-center text-[#736455] hover:text-[#1D3D3C] transition-colors"
                       title="Opções do dia"
                     >
-                      <Sliders className="w-3 h-3 text-[#DBAE3B]" />
+                      <Sliders className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#C7A03A]" />
                     </button>
                   ) : null}
                 </div>
 
                 {/* Conteúdo Central: Horário e Status */}
-                <div className="space-y-1">
+                <div className="space-y-0.5 sm:space-y-1">
                   {isOpen ? (
                     <>
-                      <div className="text-[11px] font-bold tracking-tight text-white flex items-center gap-1 truncate">
-                        <Clock className="w-3 h-3 text-[#DBAE3B] shrink-0" />
-                        <span>
+                      <div className={`text-[9px] sm:text-[11px] font-bold tracking-tight flex items-center gap-0.5 sm:gap-1 truncate ${isSelected ? "text-white" : "text-[#1D3D3C]"}`}>
+                        <Clock className={`w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0 ${isSelected ? "text-[#D9B85F]" : "text-[#C7A03A]"}`} />
+                        <span className="truncate">
                           {dayObj?.startTime.slice(0, 5)} - {dayObj?.endTime.slice(0, 5)}
                         </span>
                       </div>
 
                       {/* Pausa Almoço */}
                       {dayObj?.breakStart && (
-                        <div className="text-[10px] text-stone-400 flex items-center gap-1 truncate">
-                          <Coffee className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                          <span>
+                        <div className={`text-[8.5px] sm:text-[10px] hidden xs:flex items-center gap-0.5 sm:gap-1 truncate ${isSelected ? "text-[#FCF5EB]/80" : "text-[#736455]"}`}>
+                          <Coffee className={`w-2.5 h-2.5 shrink-0 ${isSelected ? "text-[#D9B85F]" : "text-[#80611F]"}`} />
+                          <span className="truncate">
                             {dayObj.breakStart.slice(0, 5)}-{dayObj.breakEnd?.slice(0, 5)}
                           </span>
                         </div>
@@ -682,23 +701,21 @@ export function AvailabilityManagerView({
                       {clientCount > 0 ? (
                         <div
                           className={`text-[10px] font-extrabold flex items-center gap-1 ${
-                            isFull
-                              ? "text-red-300"
-                              : isHighOccupation
-                              ? "text-amber-300"
-                              : "text-emerald-300"
+                            isSelected
+                              ? isFull ? "text-red-300" : isHighOccupation ? "text-amber-300" : "text-emerald-300"
+                              : isFull ? "text-red-700" : isHighOccupation ? "text-amber-700" : "text-emerald-700"
                           }`}
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                           <span>{clientCount} agend.</span>
                         </div>
                       ) : (
-                        <div className="text-[10px] text-stone-400 font-medium">Livre</div>
+                        <div className={`text-[10px] font-medium ${isSelected ? "text-[#FCF5EB]/60" : "text-[#736455]"}`}>Livre</div>
                       )}
                     </>
                   ) : (
-                    <div className="text-[11px] font-semibold text-stone-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-stone-500" />
+                    <div className="text-[11px] font-semibold text-[#736455] flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#D8D0BD]" />
                       <span>Fechado</span>
                     </div>
                   )}
@@ -708,23 +725,23 @@ export function AvailabilityManagerView({
                 {activeDayMenu?.dateStr === dateStr && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-10 right-2 z-30 w-44 bg-stone-900 border border-[#DBAE3B]/60 rounded-2xl shadow-2xl p-1.5 space-y-1 text-xs animate-scale-up"
+                    className="absolute top-10 right-2 z-30 w-44 bg-white border border-[#D8D0BD] rounded-2xl shadow-xl p-1.5 space-y-1 text-xs animate-scale-up text-[#1D3D3C]"
                   >
-                    <div className="px-2 py-1 text-[10px] uppercase font-bold text-[#DBAE3B] border-b border-stone-800">
+                    <div className="px-2 py-1 text-[10px] uppercase font-bold text-[#80611F] border-b border-[#D8D0BD]/60">
                       Dia {padDay}/{padMonth}
                     </div>
                     <button
                       onClick={() => handleEditSingleDay(activeDayMenu.dayObj)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-stone-800 text-stone-200 flex items-center space-x-2 transition-colors"
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-[#FAF7F2] text-[#1D3D3C] flex items-center space-x-2 transition-colors"
                     >
-                      <Edit2 className="w-3.5 h-3.5 text-[#DBAE3B]" />
+                      <Edit2 className="w-3.5 h-3.5 text-[#C7A03A]" />
                       <span>Editar horário</span>
                     </button>
                     <button
                       onClick={() => handleCloseSingleDay(dateStr)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-red-950/80 text-red-300 flex items-center space-x-2 transition-colors"
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-red-50 text-red-700 flex items-center space-x-2 transition-colors"
                     >
-                      <XCircle className="w-3.5 h-3.5 text-red-400" />
+                      <XCircle className="w-3.5 h-3.5 text-red-500" />
                       <span>Fechar este dia</span>
                     </button>
                   </div>
@@ -739,20 +756,20 @@ export function AvailabilityManagerView({
       {/* ZONA 3 — PAINEL DE CONFIGURAÇÃO (APARECE QUANDO HÁ SELEÇÃO)    */}
       {/* ============================================================== */}
       {selectedDates.size > 0 && (
-        <div className="bg-[#2D1914] rounded-2xl border border-[#DBAE3B]/60 p-5 sm:p-7 shadow-2xl space-y-6 animate-slide-up relative">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#5E372C]">
+        <div data-tutorial="abertura-time-config" className="bg-[#FCF5EB] rounded-2xl border-2 border-[#C7A03A]/60 p-5 sm:p-7 shadow-xl space-y-6 animate-slide-up relative text-[#1D3D3C]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#D8D0BD]">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[#DBAE3B]">
+              <div className="w-10 h-10 rounded-2xl bg-[#C7A03A]/20 border border-[#C7A03A]/40 flex items-center justify-center text-[#80611F]">
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg font-bold text-[#1D3D3C] flex items-center gap-2">
                   <span>{selectedDates.size} dia(s) selecionado(s)</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#DBAE3B] border border-amber-500/30">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#FAF7F2] text-[#80611F] border border-[#C7A03A]/40 font-semibold">
                     Configurar Horários
                   </span>
                 </h3>
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-[#736455]">
                   Os horários abaixo serão aplicados a todos os dias marcados no calendário.
                 </p>
               </div>
@@ -761,17 +778,17 @@ export function AvailabilityManagerView({
             <div className="flex items-center gap-2">
               <button
                 onClick={clearSelection}
-                className="px-3.5 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-700 transition-colors"
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#736455] hover:text-[#1D3D3C] text-xs font-semibold border border-[#D8D0BD] transition-colors shadow-xs"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveBatch}
                 disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-stone-950 font-extrabold text-xs shadow-lg shadow-amber-950/40 flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl gold-gradient text-[#1D3D3C] font-extrabold text-xs shadow-md flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isSubmitting ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#1D3D3C]" />
                 ) : (
                   <Check className="w-4 h-4 stroke-[3]" />
                 )}
@@ -782,79 +799,79 @@ export function AvailabilityManagerView({
 
           {/* Chips de Horários Rápidos */}
           <div className="space-y-2">
-            <span className="text-xs font-bold text-[#DBAE3B] uppercase tracking-wider block">
+            <span className="text-xs font-bold text-[#80611F] uppercase tracking-wider block">
               Horário Rápido (1 clique):
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 type="button"
                 onClick={() => applyQuickTime("manha")}
-                className="p-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#DBAE3B]"
+                className="p-3 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#C7A03A] shadow-xs"
               >
-                <Sunrise className="w-4 h-4 text-amber-400" />
+                <Sunrise className="w-4 h-4 text-[#C7A03A]" />
                 <span>🌅 Manhã 9h-13h</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => applyQuickTime("tarde")}
-                className="p-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#DBAE3B]"
+                className="p-3 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#C7A03A] shadow-xs"
               >
-                <Sunset className="w-4 h-4 text-amber-500" />
+                <Sunset className="w-4 h-4 text-[#80611F]" />
                 <span>☀️ Tarde 13h-19h</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => applyQuickTime("completo")}
-                className="p-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#DBAE3B]"
+                className="p-3 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#C7A03A] shadow-xs"
               >
-                <Sun className="w-4 h-4 text-yellow-400" />
+                <Sun className="w-4 h-4 text-amber-500" />
                 <span>🌞 Completo 9h-19h</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => applyQuickTime("estendido")}
-                className="p-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#DBAE3B]"
+                className="p-3 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs font-semibold flex items-center justify-center space-x-2 transition-all hover:border-[#C7A03A] shadow-xs"
               >
-                <Scissors className="w-4 h-4 text-[#DBAE3B]" />
+                <Scissors className="w-4 h-4 text-[#80611F]" />
                 <span>✂️ Pico 8h30-20h30</span>
               </button>
             </div>
           </div>
 
           {/* Configuração Personalizada */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-xl bg-stone-900/60 border border-stone-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-xl bg-white/80 border border-[#D8D0BD]">
             {/* Horário de Início */}
             <div>
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Início do Atendimento:
               </label>
               <input
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white font-semibold text-sm outline-none focus:border-[#DBAE3B]"
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] font-semibold text-sm outline-none focus:border-[#C7A03A]"
               />
             </div>
 
             {/* Horário de Fim */}
             <div>
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Fim do Atendimento:
               </label>
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white font-semibold text-sm outline-none focus:border-[#DBAE3B]"
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] font-semibold text-sm outline-none focus:border-[#C7A03A]"
               />
             </div>
 
             {/* Capacidade Máxima de Clientes */}
             <div>
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Limite de Clientes/Dia:
               </label>
               <input
@@ -863,13 +880,13 @@ export function AvailabilityManagerView({
                 max={25}
                 value={maxClients}
                 onChange={(e) => setMaxClients(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white font-semibold text-sm outline-none focus:border-[#DBAE3B]"
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] font-semibold text-sm outline-none focus:border-[#C7A03A]"
               />
             </div>
 
             {/* Toggle de Almoço */}
             <div className="flex flex-col justify-between">
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Pausa de Almoço?
               </label>
               <div className="flex items-center space-x-2 mt-1">
@@ -878,9 +895,9 @@ export function AvailabilityManagerView({
                   id="lunchToggle"
                   checked={hasLunchBreak}
                   onChange={(e) => setHasLunchBreak(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-500 focus:ring-[#DBAE3B] bg-stone-800 border-stone-700 cursor-pointer"
+                  className="w-4 h-4 rounded text-[#1D3D3C] accent-[#1D3D3C] focus:ring-[#C7A03A] border-[#D8D0BD] cursor-pointer"
                 />
-                <label htmlFor="lunchToggle" className="text-xs font-semibold text-stone-200 cursor-pointer">
+                <label htmlFor="lunchToggle" className="text-xs font-semibold text-[#1D3D3C] cursor-pointer">
                   {hasLunchBreak ? "Sim, pausar horário" : "Não, sem pausa"}
                 </label>
               </div>
@@ -889,27 +906,27 @@ export function AvailabilityManagerView({
 
           {/* Horários da Pausa de Almoço (se toggle ativo) */}
           {hasLunchBreak && (
-            <div className="p-3.5 rounded-xl bg-stone-900/40 border border-stone-800/80 flex flex-wrap items-center gap-4 text-xs">
-              <span className="font-bold text-[#DBAE3B] flex items-center gap-1.5">
-                <Coffee className="w-4 h-4 text-amber-400" />
+            <div className="p-3.5 rounded-xl bg-white/60 border border-[#D8D0BD] flex flex-wrap items-center gap-4 text-xs">
+              <span className="font-bold text-[#80611F] flex items-center gap-1.5">
+                <Coffee className="w-4 h-4 text-[#C7A03A]" />
                 Pausa de Almoço:
               </span>
               <div className="flex items-center space-x-2">
-                <span className="text-stone-400">De:</span>
+                <span className="text-[#736455]">De:</span>
                 <input
                   type="time"
                   value={breakStart}
                   onChange={(e) => setBreakStart(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg bg-stone-800 border border-stone-700 text-white text-xs outline-none focus:border-[#DBAE3B]"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs outline-none focus:border-[#C7A03A]"
                 />
               </div>
               <div className="flex items-center space-x-2">
-                <span className="text-stone-400">Até:</span>
+                <span className="text-[#736455]">Até:</span>
                 <input
                   type="time"
                   value={breakEnd}
                   onChange={(e) => setBreakEnd(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg bg-stone-800 border border-stone-700 text-white text-xs outline-none focus:border-[#DBAE3B]"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs outline-none focus:border-[#C7A03A]"
                 />
               </div>
             </div>
@@ -917,7 +934,7 @@ export function AvailabilityManagerView({
 
           {/* Nota Customizada Opcional */}
           <div>
-            <label className="text-xs font-bold text-stone-300 block mb-1.5">
+            <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
               Nota do dia (opcional para sua referência):
             </label>
             <input
@@ -925,31 +942,31 @@ export function AvailabilityManagerView({
               placeholder="Ex: Foco em Morena Iluminada / Apoio com assistente Débora"
               value={customNotes}
               onChange={(e) => setCustomNotes(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white text-xs outline-none focus:border-[#DBAE3B] placeholder-stone-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#D8D0BD] text-[#1D3D3C] text-xs outline-none focus:border-[#C7A03A] placeholder-[#736455]/60"
             />
           </div>
 
           {/* Seção de Templates Salvos */}
-          <div className="pt-4 border-t border-[#5E372C] flex flex-wrap items-center justify-between gap-3">
+          <div className="pt-4 border-t border-[#D8D0BD] flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-[#DBAE3B] flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold text-[#80611F] flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-[#C7A03A]" />
                 <span>Templates Salvos:</span>
               </span>
               {templates.map((tpl) => (
                 <button
                   key={tpl.id}
                   onClick={() => handleApplyTemplate(tpl)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700 border border-stone-600 text-xs font-semibold text-stone-200 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-colors shadow-xs"
                 >
                   {tpl.name}
                 </button>
               ))}
               <button
                 onClick={() => setIsNewTemplateModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-xs font-semibold text-[#DBAE3B] flex items-center space-x-1 transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-[#FAF7F2] hover:bg-white border border-[#C7A03A]/60 text-xs font-semibold text-[#80611F] flex items-center space-x-1 transition-colors shadow-xs"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 text-[#C7A03A]" />
                 <span>Salvar como Novo</span>
               </button>
             </div>
@@ -957,10 +974,10 @@ export function AvailabilityManagerView({
             <button
               onClick={handleSaveBatch}
               disabled={isSubmitting}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-stone-950 font-extrabold text-xs shadow-lg shadow-amber-950/40 flex items-center justify-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl gold-gradient text-[#1D3D3C] font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin text-[#1D3D3C]" />
               ) : (
                 <Check className="w-4 h-4 stroke-[3]" />
               )}
@@ -972,28 +989,28 @@ export function AvailabilityManagerView({
 
       {/* Modal para Salvar Novo Template */}
       {isNewTemplateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#2D1914] border border-[#DBAE3B]/60 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-[#5E372C]">
-              <h4 className="text-base font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#DBAE3B]" />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#D8D0BD] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-scale-up text-[#1D3D3C]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#D8D0BD]">
+              <h4 className="text-base font-bold text-[#1D3D3C] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#C7A03A]" />
                 <span>Salvar Configuração como Template</span>
               </h4>
               <button
                 onClick={() => setIsNewTemplateModalOpen(false)}
-                className="w-7 h-7 rounded-full bg-stone-800 text-stone-400 hover:text-white flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-[#FAF7F2] text-[#736455] hover:text-[#1D3D3C] flex items-center justify-center transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-stone-300">
-              Crie um modelo com o horário <strong>{startTime} às {endTime}</strong>
+            <p className="text-xs text-[#736455]">
+              Crie um modelo com o horário <strong className="text-[#1D3D3C]">{startTime} às {endTime}</strong>
               {hasLunchBreak ? ` (pausa ${breakStart}-${breakEnd})` : " (sem pausa)"} para aplicar rapidamente no futuro.
             </p>
 
             <div>
-              <label className="text-xs font-bold text-stone-300 block mb-1.5">
+              <label className="text-xs font-bold text-[#1D3D3C] block mb-1.5">
                 Nome do Template:
               </label>
               <input
@@ -1001,20 +1018,20 @@ export function AvailabilityManagerView({
                 placeholder="Ex: Turno Especial de Fim de Ano"
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-700 text-white text-xs outline-none focus:border-[#DBAE3B]"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-xs outline-none focus:border-[#C7A03A]"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setIsNewTemplateModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-stone-800 text-xs font-semibold text-stone-300 hover:bg-stone-700"
+                className="px-4 py-2 rounded-xl bg-[#FAF7F2] text-xs font-semibold text-[#736455] hover:text-[#1D3D3C] border border-[#D8D0BD] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveAsTemplate}
-                className="px-5 py-2 rounded-xl gold-gradient text-[#1A0F0C] text-xs font-bold shadow-md"
+                className="px-5 py-2 rounded-xl gold-gradient text-[#1D3D3C] text-xs font-bold shadow-md"
               >
                 Salvar Template
               </button>
