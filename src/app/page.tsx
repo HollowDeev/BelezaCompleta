@@ -2,40 +2,49 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { SupabaseDataService } from "@/lib/supabase/api";
 import { SalonStore } from "@/lib/storage/localStore";
-import { ServiceCatalog } from "@/components/client/ServiceCatalog";
+import { broadcastSync } from "@/lib/sync/syncBus";
+
+// Componentes da Nova Identidade Visual Oficial
+import { ClientNavbar } from "@/components/client/ClientNavbar";
+import { HeroSection } from "@/components/client/HeroSection";
+import { StatsBanner } from "@/components/client/StatsBanner";
+import { Transformations3DCarousel } from "@/components/client/Transformations3DCarousel";
+import { AboutStorySection } from "@/components/client/AboutStorySection";
+import { TransparentServicesCatalog } from "@/components/client/TransparentServicesCatalog";
+import { TestimonialsSection } from "@/components/client/TestimonialsSection";
+import { MethodologySection } from "@/components/client/MethodologySection";
+import { TeamAndSpaceSection } from "@/components/client/TeamAndSpaceSection";
+import { ClientFooter } from "@/components/client/ClientFooter";
+
+// Fluxos Interativos de Agendamento e Proposta
 import { GamifiedTriage } from "@/components/client/GamifiedTriage";
 import { SlotPicker } from "@/components/client/SlotPicker";
 import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
 
-import { SalonOrganization, UserProfile } from "@/types/salon";
+import { SalonOrganization } from "@/types/salon";
 import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
 import { Appointment } from "@/types/appointment";
 import { LuxuryProposal } from "@/types/proposal";
 import { SalonClient } from "@/types/client";
+import { AvailableDay, PreReservation, PreferredPeriod } from "@/types/availability";
 
 import {
-  Scissors,
   Sparkles,
-  Calendar,
   CheckCircle2,
-  Clock,
-  Shield,
-  MapPin,
-  Phone,
-  ArrowRight,
-  Lock,
-  Heart,
-  ChevronRight,
-  FileCheck,
-  User,
-  LogOut,
+  Calendar,
   X,
+  User,
   Eye,
   EyeOff,
   ExternalLink,
+  ChevronRight,
+  Phone,
+  FileText,
+  Search,
 } from "lucide-react";
 
 export default function ClientHomePage() {
@@ -44,6 +53,7 @@ export default function ClientHomePage() {
   const [triageForms, setTriageForms] = useState<TriageForm[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [proposals, setProposals] = useState<LuxuryProposal[]>([]);
+  const [availableDays, setAvailableDays] = useState<AvailableDay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Sessão da Cliente
@@ -75,25 +85,44 @@ export default function ClientHomePage() {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
-    }, 4000);
+    }, 4500);
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    if (sectionId === "agendar") {
+      const el = document.getElementById("servicos");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [org, srvs, forms, apts, props] = await Promise.all([
+        const todayStr = new Date().toISOString().split("T")[0];
+        const nextMonth = new Date();
+        nextMonth.setDate(nextMonth.getDate() + 45);
+        const nextMonthStr = nextMonth.toISOString().split("T")[0];
+
+        const [org, srvs, forms, apts, props, days] = await Promise.all([
           SupabaseDataService.getOrganization(),
           SupabaseDataService.getServices(),
           SupabaseDataService.getTriageForms(),
           SupabaseDataService.getAppointments(),
           SupabaseDataService.getProposals(),
+          SupabaseDataService.getAvailableDays("user-gleicy-ronha", todayStr, nextMonthStr),
         ]);
         setOrganization(org);
         setServices(srvs);
         setTriageForms(forms);
         setAppointments(apts);
         setProposals(props);
+        setAvailableDays(days);
       } catch (err) {
         console.error("Erro ao carregar dados da vitrine", err);
       } finally {
@@ -127,6 +156,7 @@ export default function ClientHomePage() {
         setActiveClient(res.client);
         setSearchPhone(res.client.phone);
         setIsAuthModalOpen(false);
+        showToast(`Bem-vinda de volta, ${res.client.name.split(" ")[0]}!`, "success");
       } else {
         if (!authName.trim()) {
           setAuthError("Informe seu nome completo.");
@@ -152,6 +182,7 @@ export default function ClientHomePage() {
         setActiveClient(saved);
         setSearchPhone(saved.phone);
         setIsAuthModalOpen(false);
+        showToast("Cadastro realizado com sucesso!", "success");
       }
     } catch (err: any) {
       setAuthError(err.message || "Erro ao conectar. Tente novamente.");
@@ -163,9 +194,10 @@ export default function ClientHomePage() {
   const handleLogoutClient = () => {
     SalonStore.setActiveClient(null);
     setActiveClient(null);
+    showToast("Sessão encerrada com sucesso.", "success");
   };
 
-  // Iniciar fluxo a partir de um serviço
+  // Iniciar fluxo a partir de um serviço escolhido
   const handleSelectService = (srv: ServiceItem) => {
     setSelectedService(srv);
     setCompletedSubmission(null);
@@ -182,348 +214,282 @@ export default function ClientHomePage() {
 
   // Concluir triagem anamnese
   const handleCompleteTriage = async (sub: TriageSubmission) => {
-    await SupabaseDataService.saveTriageSubmission(sub);
+    // 1. Salva a submissão de triagem
+    const savedSub = await SupabaseDataService.saveTriageSubmission(sub);
 
-    // Cria pré-reserva temporária na agenda com horários do motor
-    const tempApt: Appointment = {
-      id: `apt-pre-${Date.now()}`,
-      orgId: sub.orgId || "org-gleicy-ronha",
-      professionalId: selectedService?.professionalId || "user-gleicy-ronha",
-      professionalName: "Gleicy Ronha",
-      serviceId: sub.serviceId,
-      serviceTitle: sub.serviceTitle,
-      clientName: sub.clientName,
-      clientPhone: sub.clientPhone,
-      clientEmail: sub.clientEmail,
-      date: sub.preferredDate || new Date().toISOString().split("T")[0],
-      startTime: sub.preferredTimeSlot || "09:30",
-      endTime: "11:40",
-      totalDurationMin: 130,
-      status: "pending_proposal",
-      price: selectedService?.price || 710,
-      paymentStatus: "pending",
-      triageSubmissionId: sub.id,
-      stepBlocks: [],
-      notes: "Pré-reserva enviada pelo portal da cliente com anamnese capilar.",
-      createdAt: new Date().toISOString(),
-    };
+    // 2. Se for solicitação de Encaixe Especial, cria a Pré-Reserva correspondente
+    if (sub.preferredTimeSlot?.startsWith("Encaixe")) {
+      const preferredPeriod: PreferredPeriod = sub.preferredTimeSlot.includes("Manhã")
+        ? "manha"
+        : sub.preferredTimeSlot.includes("Tarde")
+        ? "tarde"
+        : "qualquer";
 
-    await SupabaseDataService.saveAppointment(tempApt);
+      const rawTime = sub.preferredTimeSlot;
+      let validStartTime = "09:30";
+      if (rawTime.includes("Tarde")) validStartTime = "14:00";
+      else if (rawTime.includes("Manhã")) validStartTime = "09:30";
+
+      await SupabaseDataService.createPreReservation({
+        orgId: savedSub.orgId || "11111111-1111-4111-8111-111111111111",
+        professionalId: selectedService?.professionalId || "58f26242-1e53-432e-b924-dea25ee2068a",
+        serviceId: savedSub.serviceId,
+        serviceName: savedSub.serviceTitle,
+        clientName: savedSub.clientName,
+        clientPhone: savedSub.clientPhone,
+        clientEmail: savedSub.clientEmail,
+        requestedDate: savedSub.preferredDate || new Date().toISOString().split("T")[0],
+        preferredPeriod,
+        preferredTime: validStartTime,
+        triageSubmissionId: savedSub.id,
+        status: "pending",
+        adminNotes: `Solicitação de Encaixe Especial (${sub.preferredTimeSlot}) enviada com triagem anamnese capilar.`,
+      });
+    }
+
+    // Dispara sinal imediato no barramento de tempo real
+    broadcastSync("triage_created", savedSub.id);
 
     setIsTakingTriage(false);
-    setCompletedSubmission(sub);
+    setCompletedSubmission(savedSub);
   };
 
-  // Concluir agendamento direto (para serviços sem triagem obrigatória)
+  // Confirmar agendamento direto pelo Slot Picker
   const handleConfirmDirectBooking = async (apt: Appointment) => {
-    await SupabaseDataService.saveAppointment(apt);
+    const saved = await SupabaseDataService.saveAppointment(apt);
+    setAppointments((prev) => [...prev, saved]);
     setIsPickingSlot(false);
-    setConfirmedAppointment(apt);
+    setConfirmedAppointment(saved);
   };
 
-  const handlePreReservationDone = (pr: any) => {
-    showToast(`Sua Pré-Reserva para ${pr.requestedDate} foi enviada! A Gleicy entrará em contato.`, "success");
+  const handlePreReservationDone = (pre: PreReservation) => {
     setIsPickingSlot(false);
+    showToast("Pré-reserva solicitada com sucesso! A Gleicy entrará em contato.", "success");
   };
 
-  // Buscar proposta existente por telefone
-  const handleSearchProposal = (e: React.FormEvent) => {
+  // Buscar proposta por telefone
+  const handleSearchProposal = async (e: React.FormEvent) => {
     e.preventDefault();
     setSearchNotFound(false);
-    const cleanQuery = searchPhone.replace(/\D/g, "");
-    if (!cleanQuery) return;
+    setSearchResultProposal(null);
+    const clean = searchPhone.replace(/\D/g, "");
+    if (!clean) return;
 
-    const found = proposals.find((p) => p.clientPhone.replace(/\D/g, "").includes(cleanQuery));
+    try {
+      const results = await SupabaseDataService.getProposalsByClientPhone(clean);
+      if (results && results.length > 0) {
+        setSearchResultProposal(results[0]);
+        return;
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar propostas pelo telefone no Supabase:", err);
+    }
+
+    const found = proposals.find((p) => p.clientPhone.replace(/\D/g, "").includes(clean));
     if (found) {
       setSearchResultProposal(found);
     } else {
       setSearchNotFound(true);
-      setSearchResultProposal(null);
     }
   };
 
   const activeTriageForm =
+    (selectedService?.triageFormId ? triageForms.find((f) => f.id === selectedService.triageFormId) : null) ||
     triageForms.find((f) => f.targetServiceId === selectedService?.id) ||
     triageForms[0];
 
+  const whatsappNumber = organization?.phone
+    ? organization.phone.replace(/\D/g, "")
+    : "5511995975725";
+
+
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#22201E] flex flex-col justify-between selection:bg-[#E5C158]/30 selection:text-[#2D1914]">
-      {/* Topo / Header da Marca */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-[#E7DCCE] px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#c59b27] to-[#8C6B1B] p-0.5 shadow-md shadow-[#c59b27]/20">
-              <div className="w-full h-full bg-[#2D1914] rounded-[14px] flex items-center justify-center text-[#E5C158]">
-                <Scissors className="w-5 h-5" />
+    <div className="min-h-screen flex flex-col bg-[#FCF5EB] text-[#1D3D3C]">
+      {/* 1. Navbar Oficial */}
+      <ClientNavbar
+        organization={organization}
+        activeClient={activeClient}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onScrollToSection={scrollToSection}
+      />
+
+      {/* 2. Hero Section */}
+      <HeroSection
+        organization={organization}
+        onExploreServices={() => scrollToSection("servicos")}
+        onBookNow={() => scrollToSection("servicos")}
+      />
+
+      {/* 3. Faixa de Estatísticas / Prova Social Numérica */}
+      <StatsBanner onBookNow={() => scrollToSection("servicos")} />
+
+      {/* Bloco 3: Carrossel 3D de Transformações Reais */}
+      <Transformations3DCarousel onBookResult={() => scrollToSection("servicos")} />
+
+      {/* 4. Confirmações de Agendamento ou Triagem */}
+      {(completedSubmission || confirmedAppointment) && (
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8 w-full animate-fade-in">
+          {completedSubmission && (
+            <div className="p-8 sm:p-10 rounded-3xl bg-white border border-[#C7A03A]/50 shadow-2xl text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-[#F0EFE3] text-[#1D3D3C] flex items-center justify-center mx-auto border border-[#C7A03A]/40">
+                <CheckCircle2 className="w-8 h-8 text-[#C7A03A]" />
               </div>
-            </div>
-            <div>
-              <span className="font-bold text-base tracking-tight text-[#2D1914] block leading-tight">
-                Espaço da Beleza Gleicy Ronha
+              <span className="font-gwendolyn text-3xl sm:text-4xl text-[#80611F] block">
+                O cuidado já começou
               </span>
-              <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold block">
-                Exclusividade & Alta Performance em Cachos
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Status da Sessão da Cliente */}
-            {activeClient ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 bg-[#FAF7F2] border border-[#E7DCCE] px-3 py-1.5 rounded-full">
-                  <div className="w-6 h-6 rounded-full bg-[#2D1914] text-[#E5C158] font-bold text-xs flex items-center justify-center">
-                    {activeClient.name.charAt(0)}
-                  </div>
-                  <span className="text-xs font-bold text-[#2D1914] hidden sm:inline">
-                    Olá, {activeClient.name.split(" ")[0]}
-                  </span>
-                </div>
-                <button
-                  onClick={handleLogoutClient}
-                  title="Sair da Conta"
-                  className="p-1.5 text-stone-400 hover:text-red-700 rounded-full hover:bg-stone-100 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthMode("login");
-                  setIsAuthModalOpen(true);
-                }}
-                className="text-xs font-semibold text-[#7B493B] hover:text-[#2D1914] px-3.5 py-1.5 rounded-full border border-[#E7DCCE] hover:border-[#AD841D] transition-all flex items-center gap-1.5 bg-white shadow-2xs"
-              >
-                <User className="w-3.5 h-3.5 text-[#AD841D]" />
-                <span>Área da Cliente</span>
-              </button>
-            )}
-
-            <a
-              href="#proposta-search"
-              className="hidden sm:flex text-xs font-semibold text-[#7B493B] hover:text-[#2D1914] px-3 py-1.5 rounded-full border border-[#E7DCCE] hover:border-[#AD841D] transition-all"
-            >
-              Consultar Proposta
-            </a>
-
-            {/* Link Discreto para Área Restrita da Equipe */}
-            <Link
-              href="/login"
-              className="text-xs font-semibold text-[#2D1914] bg-[#F4ECE1] hover:bg-[#EADDCF] px-3.5 py-1.5 rounded-full border border-[#D9C4B0] flex items-center gap-1.5 transition-all shadow-xs"
-            >
-              <Lock className="w-3.5 h-3.5 text-[#AD841D]" />
-              <span className="hidden md:inline">Acesso Profissional</span>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero Section Luxuosa */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#2D1914] via-[#3D251E] to-[#2D1914] text-white py-16 sm:py-24 px-6">
-        <div className="absolute top-0 right-1/4 w-96 h-96 rounded-full bg-[#E5C158]/10 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-10 w-80 h-80 rounded-full bg-[#AD841D]/15 blur-3xl pointer-events-none" />
-
-        <div className="relative max-w-4xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E5C158]/10 border border-[#E5C158]/30 text-[#E5C158] text-xs font-bold tracking-wide">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Engenharia de Mechas Saudáveis & Gestão Dinâmica de Pausas</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-tight font-editorial">
-            Revele sua melhor curvatura com um iluminado de alta performance.
-          </h1>
-
-          <p className="text-sm sm:text-lg text-[#E3D5C8] max-w-2xl mx-auto leading-relaxed">
-            Cada cabelo é único. Nossa metodologia combina triagem diagnóstica profunda, técnica superclareadora preservando a barreira lipídica e agendamento inteligente com otimização de horários.
-          </p>
-
-          <div className="pt-4 flex flex-wrap justify-center gap-4 text-xs text-[#E5C158]">
-            <div className="flex items-center gap-1.5 bg-[#20100C]/60 px-3.5 py-2 rounded-xl border border-[#c59b27]/20">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Diagnóstico Capilar Prévio</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-[#20100C]/60 px-3.5 py-2 rounded-xl border border-[#c59b27]/20">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>5% de Desconto no PIX</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-[#20100C]/60 px-3.5 py-2 rounded-xl border border-[#c59b27]/20">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Encaixe Inteligente em Pausas Químicas</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Conteúdo Central */}
-      <main className="max-w-6xl mx-auto px-6 py-12 space-y-16 flex-1 w-full">
-        {/* Confirmação de Triagem Realizada */}
-        {completedSubmission && (
-          <div className="p-8 rounded-3xl bg-white border border-[#c59b27]/40 shadow-xl text-center space-y-4 max-w-2xl mx-auto animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold text-[#2D1914] font-editorial">
-              Triagem Capilar Recebida com Sucesso!
-            </h2>
-            <p className="text-sm text-[#5E372C] leading-relaxed">
-              Obrigada, <strong>{completedSubmission.clientName}</strong>! Seus dados e fotos já estão na fila técnica da Gleicy Ronha.
-            </p>
-            <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] text-xs text-[#7B493B] space-y-1 text-left">
-              <div>• <strong>Procedimento Desejado:</strong> {completedSubmission.serviceTitle}</div>
-              <div>• <strong>Data de Preferência:</strong> {completedSubmission.preferredDate} às {completedSubmission.preferredTimeSlot}</div>
-              <div>• <strong>Status:</strong> Pré-reserva bloqueada enquanto a Gleicy formula sua Proposta Personalizada.</div>
-            </div>
-            <p className="text-xs text-[#AD841D] font-medium">
-              Você receberá a Proposta de Transformação no seu WhatsApp ({completedSubmission.clientPhone}) em até 24h a 48h.
-            </p>
-            <button
-              onClick={() => setCompletedSubmission(null)}
-              className="mt-2 px-6 py-2.5 rounded-full bg-[#2D1914] text-white text-xs font-bold hover:bg-[#3D251E] transition-all"
-            >
-              Fazer Outra Consulta
-            </button>
-          </div>
-        )}
-
-        {/* Confirmação de Agendamento Direto */}
-        {confirmedAppointment && (
-          <div className="p-8 rounded-3xl bg-white border border-emerald-300 shadow-xl text-center space-y-4 max-w-2xl mx-auto animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold text-[#2D1914] font-editorial">
-              Horário Confirmado na Agenda!
-            </h2>
-            <p className="text-sm text-[#5E372C] leading-relaxed">
-              <strong>{confirmedAppointment.clientName}</strong>, seu horário para <strong>{confirmedAppointment.serviceTitle}</strong> foi agendado com sucesso para o dia <strong>{confirmedAppointment.date}</strong> às <strong>{confirmedAppointment.startTime}</strong> (término às {confirmedAppointment.endTime}).
-            </p>
-            <button
-              onClick={() => setConfirmedAppointment(null)}
-              className="mt-2 px-6 py-2.5 rounded-full bg-[#2D1914] text-white text-xs font-bold hover:bg-[#3D251E] transition-all"
-            >
-              Voltar ao Catálogo
-            </button>
-          </div>
-        )}
-
-        {/* Modal Interativo de Triagem Anamnese */}
-        {isTakingTriage && activeTriageForm && selectedService && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl max-w-3xl w-full p-2 sm:p-4 shadow-2xl border border-[#c59b27]/30 my-4 max-h-[92vh] overflow-y-auto">
-              <GamifiedTriage
-                form={activeTriageForm}
-                service={selectedService}
-                existingAppointments={appointments}
-                onComplete={handleCompleteTriage}
-                onCancel={() => setIsTakingTriage(false)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Modal Interativo de Seleção de Horário (Slot Picker) */}
-        {isPickingSlot && selectedService && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl max-w-3xl w-full p-2 sm:p-4 shadow-2xl border border-[#c59b27]/30 my-4 max-h-[92vh] overflow-y-auto">
-              <SlotPicker
-                service={selectedService}
-                existingAppointments={appointments}
-                onConfirmBooking={handleConfirmDirectBooking}
-                onRequestPreReservation={handlePreReservationDone}
-                onCancel={() => setIsPickingSlot(false)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Catálogo de Serviços */}
-        {!completedSubmission && !confirmedAppointment && (
-          <div className="space-y-8">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#2D1914] font-editorial">
-                Nossos Procedimentos Exclusivos
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#1D3D3C] font-editorial">
+                Triagem Capilar Recebida com Sucesso!
               </h2>
-              <p className="text-sm text-[#7B493B] max-w-xl mx-auto">
-                Escolha o serviço desejado para iniciar sua triagem capilar online ou reservar seu horário diretamente na agenda com cálculo dinâmico de etapas.
+              <p className="text-sm text-[#736455] leading-relaxed max-w-xl mx-auto">
+                Obrigada, <strong>{completedSubmission.clientName}</strong>! Suas respostas e fotos foram enviadas diretamente para a bancada técnica da Gleicy Ronha.
               </p>
+              <div className="p-5 rounded-2xl bg-[#FCF5EB] border border-[#D8D0BD] text-xs text-[#1D3D3C] space-y-1.5 text-left max-w-md mx-auto">
+                <div>• <strong>Procedimento:</strong> {completedSubmission.serviceTitle}</div>
+                <div>• <strong>Data de Preferência:</strong> {completedSubmission.preferredDate} às {completedSubmission.preferredTimeSlot}</div>
+                <div>• <strong>Status:</strong> Em formulação de Proposta Consultiva de Luxo.</div>
+              </div>
+              <p className="text-xs text-[#80611F] font-semibold">
+                Você receberá sua Proposta Oficial com diagnóstico e cronograma no WhatsApp ({completedSubmission.clientPhone}) em breve!
+              </p>
+              <button
+                onClick={() => setCompletedSubmission(null)}
+                className="mt-3 px-7 py-3 rounded-xl bg-[#1D3D3C] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#28504D] transition-all shadow-sm"
+              >
+                Concluir e Voltar
+              </button>
             </div>
+          )}
 
-            <ServiceCatalog
-              services={services}
-              onSelectService={handleSelectService}
-            />
-          </div>
-        )}
-
-        {/* Seção de Busca / Consulta de Propostas Aprovadas */}
-        <section id="proposta-search" className="pt-8 border-t border-[#E7DCCE]">
-          <div className="bg-white rounded-3xl p-8 border border-[#E7DCCE] shadow-md max-w-3xl mx-auto">
-            <div className="text-center mb-6">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#AD841D] block">
-                Portal da Cliente
+          {confirmedAppointment && (
+            <div className="p-8 sm:p-10 rounded-3xl bg-white border border-emerald-400 shadow-2xl text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-300">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              </div>
+              <span className="font-gwendolyn text-3xl sm:text-4xl text-[#C7A03A] block">
+                Tudo pronto para receber você
               </span>
-              <h3 className="text-xl font-bold text-[#2D1914] font-editorial">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#1D3D3C] font-editorial">
+                Horário Confirmado na Agenda!
+              </h2>
+              <p className="text-sm text-[#736455] leading-relaxed max-w-xl mx-auto">
+                <strong>{confirmedAppointment.clientName}</strong>, seu horário para <strong>{confirmedAppointment.serviceTitle}</strong> foi reservado para o dia <strong>{confirmedAppointment.date}</strong> às <strong>{confirmedAppointment.startTime}</strong> (término previsto às {confirmedAppointment.endTime}).
+              </p>
+              <button
+                onClick={() => setConfirmedAppointment(null)}
+                className="mt-3 px-7 py-3 rounded-xl bg-[#1D3D3C] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#28504D] transition-all shadow-sm"
+              >
+                Voltar à Página Principal
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 5. Nossa História & Essência */}
+      <AboutStorySection />
+
+      {/* 6. Catálogo de Serviços com Valores e Etapas */}
+      <TransparentServicesCatalog
+        services={services}
+        onSelectService={handleSelectService}
+        whatsappNumber={whatsappNumber}
+      />
+
+      {/* 7. Depoimentos de Clientes */}
+      <TestimonialsSection />
+
+      {/* 8. O Método Gleicy Ronha */}
+      <MethodologySection />
+
+      {/* 9. O Espaço & Equipe Multidisciplinar */}
+      <TeamAndSpaceSection
+        organization={organization}
+        whatsappNumber={whatsappNumber}
+        onBookHair={() => scrollToSection("servicos")}
+      />
+
+      {/* 10. Área de Consulta Rápida de Proposta */}
+      <section id="proposta-search" className="py-16 sm:py-20 bg-[#E5DFD1] border-t border-[#D8D0BD] relative overflow-hidden font-sans">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-10">
+          <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#D8D0BD] shadow-lg text-center space-y-5">
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#80611F] block">
+                Portal Consultivo
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-[#1D3D3C] font-sans">
                 Já recebeu sua Proposta de Transformação?
               </h3>
-              <p className="text-xs text-[#7B493B] mt-1">
-                Digite seu número de telefone com DDD para visualizar e aprovar sua proposta oficial.
+              {/* Linha grafismo 1 */}
+              <div className="relative w-36 sm:w-44 h-2.5 mx-auto pointer-events-none opacity-70">
+                <Image
+                  src="/brand/Grafismos/Linha grafismo 1.png"
+                  alt=""
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <p className="text-xs sm:text-sm text-[#736455] max-w-lg mx-auto leading-relaxed">
+                Digite seu número de WhatsApp com DDD para visualizar e aprovar seu orçamento exclusivo diretamente no portal.
               </p>
             </div>
 
             <form onSubmit={handleSearchProposal} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input
                 type="tel"
-                placeholder="(11) 93342-9586"
+                placeholder="(11) 98765-4321"
                 value={searchPhone}
                 onChange={(e) => setSearchPhone(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-xl border border-[#D9C4B0] bg-[#FAF7F2] text-sm text-[#2D1914] placeholder-[#A8988F] focus:outline-none focus:border-[#AD841D]"
+                className="flex-1 px-4 py-3 rounded-xl border border-[#D8D0BD] bg-[#FCF5EB] text-sm text-[#1D3D3C] placeholder-[#736455]/60 focus:outline-none focus:border-[#1D3D3C] focus:ring-1 focus:ring-[#1D3D3C]"
               />
               <button
                 type="submit"
-                className="px-6 py-3 bg-[#2D1914] hover:bg-[#3D251E] text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                className="px-6 py-3 bg-[#1D3D3C] hover:bg-[#28504D] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center space-x-2"
               >
-                <span>Buscar</span>
-                <ChevronRight className="w-4 h-4" />
+                <Search className="w-3.5 h-3.5 text-[#C7A03A]" />
+                <span>Consultar</span>
               </button>
             </form>
 
             {searchNotFound && (
-              <p className="text-center text-xs text-red-600 mt-4">
+              <p className="text-xs text-[#9B3834] font-medium pt-2">
                 Nenhuma proposta ativa foi encontrada para este telefone. Entre em contato conosco via WhatsApp.
               </p>
             )}
 
-            {/* Proposta encontrada */}
+            {/* Proposta Encontrada */}
             {searchResultProposal && (
-              <div className="mt-6 p-5 rounded-2xl bg-[#FAF7F2] border border-[#c59b27]/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <span className="font-bold text-sm text-[#2D1914] block">
+              <div className="mt-6 p-5 sm:p-6 rounded-2xl bg-[#FCF5EB] border border-[#C7A03A]/50 flex flex-col sm:flex-row items-center justify-between gap-4 text-left animate-fade-in">
+                <div className="space-y-1">
+                  <span className="font-bold text-sm text-[#1D3D3C] block font-editorial">
                     {searchResultProposal.title}: {searchResultProposal.subtitle}
                   </span>
-                  <span className="text-xs text-[#7B493B]">
-                    Cliente: {searchResultProposal.clientName} · Total: R$ {searchResultProposal.pixTotal.toFixed(2)} (PIX)
+                  <span className="text-xs text-[#736455] block">
+                    Cliente: <strong>{searchResultProposal.clientName}</strong> • Total Pix: R$ {searchResultProposal.pixTotal.toFixed(2)}
                   </span>
-                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                    searchResultProposal.status === "approved"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {searchResultProposal.status === "approved" ? "Proposta Aprovada" : "Aguardando Aprovação"}
+                  <span
+                    className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                      searchResultProposal.status === "approved"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {searchResultProposal.status === "approved" ? "Proposta Aprovada" : "Aguardando Aprovação (48h)"}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center space-x-2 w-full sm:w-auto">
                   <Link
                     href={`/proposta/${searchResultProposal.id}`}
                     target="_blank"
-                    className="px-4 py-2.5 bg-white border border-[#E7DCCE] hover:border-[#AD841D] text-[#2D1914] text-xs font-bold rounded-xl flex items-center gap-1 transition-all"
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-[#D8D0BD] hover:border-[#1D3D3C] text-[#1D3D3C] text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition-all shadow-2xs"
                   >
-                    <span>Abrir Página Web</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-[#AD841D]" />
+                    <span>Abrir Link</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-[#C7A03A]" />
                   </Link>
+
                   <button
                     onClick={() => setViewingProposal(searchResultProposal)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-[#c59b27] to-[#8C6B1B] text-[#1E120E] text-xs font-bold rounded-xl shadow-xs hover:opacity-95 transition-all"
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1D3D3C] text-[#FCF5EB] text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm hover:bg-[#28504D] transition-all"
                   >
                     Visualizar PDF
                   </button>
@@ -531,13 +497,51 @@ export default function ClientHomePage() {
               </div>
             )}
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* 9. Rodapé Completo da Marca */}
+      <ClientFooter
+        organization={organization}
+        onScrollToSection={scrollToSection}
+      />
+
+      {/* Modal Interativo de Triagem Anamnese (quando serviço exige) */}
+      {isTakingTriage && activeTriageForm && selectedService && (
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-3xl w-full p-1 sm:p-3 shadow-2xl border border-[#C7A03A]/40 my-auto max-h-[96vh] sm:max-h-[92vh] overflow-y-auto">
+            <GamifiedTriage
+              form={activeTriageForm}
+              service={selectedService}
+              existingAppointments={appointments}
+              availableDays={availableDays}
+              onComplete={handleCompleteTriage}
+              onCancel={() => setIsTakingTriage(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Interativo de Seleção de Horário (Slot Picker Direto) */}
+      {isPickingSlot && selectedService && (
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-3xl w-full p-1 sm:p-3 shadow-2xl border border-[#C7A03A]/40 my-auto max-h-[96vh] sm:max-h-[92vh] overflow-y-auto">
+            <SlotPicker
+              service={selectedService}
+              existingAppointments={appointments}
+              availableDays={availableDays}
+              onConfirmBooking={handleConfirmDirectBooking}
+              onRequestPreReservation={handlePreReservationDone}
+              onCancel={() => setIsPickingSlot(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal de Proposta PDF */}
       {viewingProposal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-4xl w-full p-3 sm:p-8 shadow-2xl my-auto max-h-[96vh] sm:max-h-[90vh] overflow-y-auto border border-[#D8D0BD]">
             <LuxuryProposalPDF
               proposal={viewingProposal}
               isClientView={true}
@@ -554,23 +558,23 @@ export default function ClientHomePage() {
 
       {/* Modal de Login / Registro da Cliente */}
       {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-[#c59b27]/30 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-[#122B2A]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-[#D8D0BD] relative animate-fade-in">
             <button
               onClick={() => setIsAuthModalOpen(false)}
-              className="absolute right-4 top-4 text-stone-400 hover:text-stone-700"
+              className="p-1 rounded-full text-stone-400 hover:text-stone-700 absolute right-4 top-4 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="text-center mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#c59b27] to-[#8C6B1B] text-[#2D1914] flex items-center justify-center mx-auto mb-3 shadow-md">
-                <User className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center mx-auto mb-3 shadow-md border border-[#C7A03A]/40 font-editorial font-bold text-lg">
+                GR
               </div>
-              <h3 className="font-editorial text-2xl font-bold text-[#2D1914]">
+              <h3 className="font-editorial text-2xl font-bold text-[#1D3D3C]">
                 {authMode === "login" ? "Área da Cliente" : "Criar Meu Cadastro"}
               </h3>
-              <p className="text-xs text-[#683C30] mt-1">
+              <p className="text-xs text-[#736455] mt-1">
                 {authMode === "login"
                   ? "Acesse suas propostas, agendamentos e histórico."
                   : "Cadastre-se para agendar com rapidez e segurança."}
@@ -578,17 +582,17 @@ export default function ClientHomePage() {
             </div>
 
             {/* Alternar modo */}
-            <div className="flex bg-[#FAF7F2] p-1 rounded-xl border border-[#E7DCCE] text-xs mb-4">
+            <div className="flex bg-[#FCF5EB] p-1 rounded-xl border border-[#D8D0BD] text-xs mb-4">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode("login");
                   setAuthError("");
                 }}
-                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${
+                className={`flex-1 py-2 rounded-lg font-medium transition-all ${
                   authMode === "login"
-                    ? "bg-[#2D1914] text-white font-bold shadow-2xs"
-                    : "text-stone-600"
+                    ? "bg-[#1D3D3C] text-white font-bold shadow-2xs"
+                    : "text-[#736455] hover:text-[#1D3D3C]"
                 }`}
               >
                 Já sou Cliente
@@ -599,10 +603,10 @@ export default function ClientHomePage() {
                   setAuthMode("register");
                   setAuthError("");
                 }}
-                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${
+                className={`flex-1 py-2 rounded-lg font-medium transition-all ${
                   authMode === "register"
-                    ? "bg-[#2D1914] text-white font-bold shadow-2xs"
-                    : "text-stone-600"
+                    ? "bg-[#1D3D3C] text-white font-bold shadow-2xs"
+                    : "text-[#736455] hover:text-[#1D3D3C]"
                 }`}
               >
                 Primeira Vez
@@ -610,7 +614,7 @@ export default function ClientHomePage() {
             </div>
 
             {authError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 mb-4">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-[#9B3834] mb-4">
                 {authError}
               </div>
             )}
@@ -618,7 +622,7 @@ export default function ClientHomePage() {
             <form onSubmit={handleClientAuth} className="space-y-4">
               {authMode === "register" && (
                 <div>
-                  <label className="block text-xs font-semibold text-[#2D1914] mb-1">
+                  <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
                     Nome Completo *
                   </label>
                   <input
@@ -626,14 +630,14 @@ export default function ClientHomePage() {
                     required
                     value={authName}
                     onChange={(e) => setAuthName(e.target.value)}
-                    placeholder="Ex: Isa Franca"
-                    className="w-full p-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
+                    placeholder="Ex: Amanda Silva"
+                    className="w-full p-3 rounded-xl border border-[#D8D0BD] bg-[#FCF5EB] text-xs text-[#1D3D3C] focus:border-[#1D3D3C] outline-none"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-[#2D1914] mb-1">
+                <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
                   WhatsApp com DDD *
                 </label>
                 <input
@@ -642,12 +646,12 @@ export default function ClientHomePage() {
                   value={authPhone}
                   onChange={(e) => setAuthPhone(e.target.value)}
                   placeholder="Ex: (11) 98765-4321"
-                  className="w-full p-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
+                  className="w-full p-3 rounded-xl border border-[#D8D0BD] bg-[#FCF5EB] text-xs text-[#1D3D3C] focus:border-[#1D3D3C] outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#2D1914] mb-1">
+                <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
                   {authMode === "register" ? "Crie uma Senha *" : "Sua Senha *"}
                 </label>
                 <div className="relative">
@@ -657,12 +661,12 @@ export default function ClientHomePage() {
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
                     placeholder={authMode === "register" ? "Mínimo 3 caracteres" : "Digite sua senha"}
-                    className="w-full p-2.5 pr-9 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
+                    className="w-full p-3 pr-10 rounded-xl border border-[#D8D0BD] bg-[#FCF5EB] text-xs text-[#1D3D3C] focus:border-[#1D3D3C] outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowAuthPassword(!showAuthPassword)}
-                    className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700"
+                    className="absolute right-3 top-3 text-stone-400 hover:text-stone-700"
                   >
                     {showAuthPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -672,46 +676,26 @@ export default function ClientHomePage() {
               <button
                 type="submit"
                 disabled={isAuthLoading}
-                className="w-full py-3 rounded-xl text-white gold-gradient font-bold text-xs shadow-md hover:opacity-95 transition-all disabled:opacity-50 mt-2"
+                className="w-full py-3.5 rounded-xl text-white bg-[#1D3D3C] hover:bg-[#28504D] active:bg-[#122B2A] font-bold text-xs uppercase tracking-wider shadow-md transition-all disabled:opacity-50 mt-2 border border-[#C7A03A]/40"
               >
-                {isAuthLoading ? "Conectando..." : authMode === "login" ? "Entrar na Minha Conta" : "Criar Cadastro"}
+                {isAuthLoading ? "Conectando..." : authMode === "login" ? "Entrar na Minha Conta" : "Criar Meu Cadastro"}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Footer Elegante */}
-      <footer className="bg-[#2D1914] text-[#E3D5C8] border-t border-[#4A322B] py-12 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-          <div>
-            <span className="font-bold text-base text-white block">
-              Espaço da Beleza Gleicy Ronha
-            </span>
-            <span className="text-xs text-[#AD841D]">
-              Av. Paulista, 1000 - Jardins · São Paulo, SP · (11) 98765-4321
-            </span>
-          </div>
-
-          <div className="flex items-center gap-6 text-xs text-[#C4B2A7]">
-            <Link href="/login" className="hover:text-[#E5C158] transition-colors flex items-center gap-1">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Painel do Salão / Login</span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-[#4A322B]/60 text-center text-xs text-[#786962]">
-          © 2026 Glaicy Agenda SaaS. Todos os direitos reservados.
-        </div>
-      </footer>
-
-      {/* Toast Notification */}
+      {/* Notificação Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-xl text-white font-semibold transition-all ${
-          toast.type === 'success' ? 'bg-amber-600 border border-amber-400' : 'bg-red-800'
-        }`}>
-          {toast.message}
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center space-x-2 ${
+            toast.type === "success"
+              ? "bg-[#1D3D3C] text-[#FCF5EB] border border-[#C7A03A]"
+              : "bg-[#9B3834] text-white"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-[#C7A03A]" />
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

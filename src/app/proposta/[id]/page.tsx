@@ -38,11 +38,32 @@ function ProposalView() {
     loadProposal();
   }, [proposalId]);
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (
+    id: string,
+    options?: { chosenDate?: string; chosenTime?: string }
+  ) => {
     try {
-      await SupabaseDataService.approveProposal(id);
+      await SupabaseDataService.approveProposal(id, options);
       if (proposal) {
-        setProposal({ ...proposal, status: "approved" });
+        setProposal({
+          ...proposal,
+          status: "approved",
+          schedulingDetails: proposal.schedulingDetails
+            ? {
+                ...proposal.schedulingDetails,
+                confirmedDate:
+                  options?.chosenDate ||
+                  proposal.schedulingDetails.confirmedDate ||
+                  proposal.schedulingDetails.suggestedDateStart,
+                confirmedTime:
+                  options?.chosenTime ||
+                  proposal.schedulingDetails.confirmedTime ||
+                  proposal.schedulingDetails.suggestedTime,
+                clientChosenDate: options?.chosenDate,
+                clientChosenTime: options?.chosenTime,
+              }
+            : undefined,
+        });
       }
     } catch (err) {
       console.error("Erro ao aprovar proposta:", err);
@@ -89,32 +110,32 @@ function ProposalView() {
   return (
     <div className="min-h-screen bg-[#FAF7F2]">
       {/* Barra de Topo Elegante da Página Web */}
-      <header className="no-print bg-white/95 backdrop-blur-md border-b border-[#E7DCCE]/80 sticky top-0 z-30 px-4 sm:px-8 py-3.5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#FAF7F2] border border-[#E7DCCE] flex items-center justify-center">
-              <Scissors className="w-4 h-4 text-[#C59B27]" />
+      <header className="no-print bg-white/95 backdrop-blur-md border-b border-[#E7DCCE]/80 sticky top-0 z-30 px-3.5 sm:px-8 py-2.5 sm:py-3.5">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#FAF7F2] border border-[#E7DCCE] flex items-center justify-center shrink-0">
+              <Scissors className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C59B27]" />
             </div>
-            <div>
-              <span className="font-editorial text-sm sm:text-base font-bold text-[#2D1914] block leading-tight">
+            <div className="min-w-0">
+              <span className="font-editorial text-xs sm:text-base font-bold text-[#2D1914] block leading-tight truncate">
                 Espaço Gleicy Ronha
               </span>
-              <span className="text-[10px] uppercase tracking-wider text-[#AD841D] font-medium block">
-                Proposta Exclusiva & Personalizada
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#AD841D] font-medium block truncate">
+                Proposta Exclusiva &amp; Personalizada
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block text-xs text-stone-500">
-              Cliente: <strong className="text-[#2D1914]">{proposal.clientName}</strong>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] sm:text-xs text-stone-500 truncate max-w-[140px] sm:max-w-xs">
+              <span className="hidden xs:inline">Cliente: </span><strong className="text-[#2D1914]">{proposal.clientName}</strong>
             </span>
           </div>
         </div>
       </header>
 
       {/* Conteúdo Principal: Proposta Diagramada */}
-      <main className="max-w-5xl mx-auto py-6">
+      <main className="max-w-5xl mx-auto py-3 sm:py-6 px-2 sm:px-4">
         <LuxuryProposalPDF
           proposal={proposal}
           isClientView={true}
