@@ -5,7 +5,12 @@ import { ServiceItem } from "@/types/service";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import { AvailableDay, PreReservation, PreferredPeriod } from "@/types/availability";
-import { calculateAvailableSlots, AvailableSlot } from "@/lib/scheduling/engine";
+import {
+  calculateAvailableSlots,
+  calculateDaySlotGrid,
+  AvailableSlot,
+  DaySlotItem,
+} from "@/lib/scheduling/engine";
 import { SalonStore } from "@/lib/storage/localStore";
 import { SupabaseDataService } from "@/lib/supabase/api";
 import { formatBRL, parseHHmmToMinutes } from "@/lib/utils";
@@ -30,6 +35,7 @@ import {
   Check,
   Send,
   Star,
+  Info,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -75,8 +81,21 @@ export function SlotPicker({
   onCancel,
   onRequestPreReservation,
 }: SlotPickerProps) {
-  const upcomingDays = useMemo(() => getUpcomingDays(21), []);
-  const [selectedDate, setSelectedDate] = useState(upcomingDays[0]?.dateStr || "2026-10-18");
+  const [upcomingDays, setUpcomingDays] = useState<{
+    dateStr: string;
+    dayNum: number;
+    weekDay: string;
+    month: string;
+    isToday: boolean;
+    isTomorrow: boolean;
+  }[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+
+  useEffect(() => {
+    const days = getUpcomingDays(21);
+    setUpcomingDays(days);
+    setSelectedDate(days[0]?.dateStr || "");
+  }, []);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [slotFilter, setSlotFilter] = useState<"all" | "encaixes" | "manha" | "tarde">("all");
 
@@ -144,6 +163,37 @@ export function SlotPicker({
     });
   }, [initialAvailableDays, service.professionalId]);
 
+  // Mapeamento de disponibilidade para as pílulas de dias (Aberto c/ vagas, Esgotado ou Fechado)
+  const dayAvailabilityMap = useMemo(() => {
+    const map: Record<string, { isOpen: boolean; hasSlots: boolean; availableCount: number }> = {};
+    upcomingDays.forEach((day) => {
+      const dConfig = daysList.find((d) => d.date === day.dateStr && d.isOpen);
+      if (!dConfig) {
+        map[day.dateStr] = { isOpen: false, hasSlots: false, availableCount: 0 };
+      } else {
+        const slots = calculateAvailableSlots(
+          service,
+          day.dateStr,
+          service.professionalId || "user-gleicy-ronha",
+          existingAppointments,
+          {
+            openMinutes: parseHHmmToMinutes(dConfig.startTime),
+            closeMinutes: parseHHmmToMinutes(dConfig.endTime),
+            breakStartMinutes: dConfig.breakStart ? parseHHmmToMinutes(dConfig.breakStart) : undefined,
+            breakEndMinutes: dConfig.breakEnd ? parseHHmmToMinutes(dConfig.breakEnd) : undefined,
+            slotIntervalMinutes: 30,
+          }
+        );
+        map[day.dateStr] = {
+          isOpen: true,
+          hasSlots: slots.length > 0,
+          availableCount: slots.length,
+        };
+      }
+    });
+    return map;
+  }, [upcomingDays, daysList, service, existingAppointments]);
+
   // Configuração do dia selecionado
   const currentDayConfig = useMemo(() => {
     return daysList.find((d) => d.date === selectedDate && d.isOpen);
@@ -151,8 +201,8 @@ export function SlotPicker({
 
   const isDayOpen = Boolean(currentDayConfig);
 
-  // Calcula slots via engine dinâmica com horários e almoço do dia
-  const allSlots = useMemo(() => {
+  // Calcula a grade completa de horários do dia (incluindo ocupados por agendamento e pausas)
+  const dayGridSlots = useMemo(() => {
     if (!isDayOpen) return [];
 
     const salonConfig = {
@@ -160,10 +210,10 @@ export function SlotPicker({
       closeMinutes: currentDayConfig ? parseHHmmToMinutes(currentDayConfig.endTime) : 19 * 60,
       breakStartMinutes: currentDayConfig?.breakStart ? parseHHmmToMinutes(currentDayConfig.breakStart) : undefined,
       breakEndMinutes: currentDayConfig?.breakEnd ? parseHHmmToMinutes(currentDayConfig.breakEnd) : undefined,
-      slotIntervalMinutes: currentDayConfig?.slotIntervalMin ?? 15,
+      slotIntervalMinutes: 30,
     };
 
-    return calculateAvailableSlots(
+    return calculateDaySlotGrid(
       service,
       selectedDate,
       service.professionalId || "user-gleicy-ronha",
@@ -172,20 +222,21 @@ export function SlotPicker({
     );
   }, [service, selectedDate, existingAppointments, isDayOpen, currentDayConfig]);
 
-  // Filtra slots por período ou destaque
+  const availableSlots = useMemo(() => dayGridSlots.filter((s) => s.isAvailable), [dayGridSlots]);
+  const availableSlotsCount = availableSlots.length;
+  const encaixesCount = useMemo(() => dayGridSlots.filter((s) => s.isEncaixe).length, [dayGridSlots]);
+  const occupiedCount = useMemo(() => dayGridSlots.filter((s) => s.status === "occupied").length, [dayGridSlots]);
+
+  // Filtra slots por período ou categoria
   const filteredSlots = useMemo(() => {
-    return allSlots.filter((slot) => {
+    return dayGridSlots.filter((slot) => {
       const hour = parseInt(slot.time.split(":")[0], 10);
       if (slotFilter === "encaixes") return slot.isEncaixe;
       if (slotFilter === "manha") return hour < 12;
       if (slotFilter === "tarde") return hour >= 12;
       return true;
     });
-  }, [allSlots, slotFilter]);
-
-  const encaixesCount = useMemo(() => {
-    return allSlots.filter((s) => s.isEncaixe).length;
-  }, [allSlots]);
+  }, [dayGridSlots, slotFilter]);
 
   // Alterna conta / logout do cliente
   const handleSwitchAccount = () => {
@@ -219,45 +270,29 @@ export function SlotPicker({
           return;
         }
 
-        if (authMode === "login") {
-          // Login com Telefone + Senha
-          const loginRes = await SupabaseDataService.loginClient(clientPhone, clientPassword);
-          if (!loginRes.success || !loginRes.client) {
-            setAuthError(loginRes.message || "Telefone ou senha inválidos.");
-            setIsAuthenticating(false);
-            return;
-          }
-          clientToUse = loginRes.client;
-          setActiveClient(loginRes.client);
-        } else {
-          // Cadastro Novo: Nome + Telefone + Senha
-          if (!clientName.trim()) {
-            setAuthError("Por favor, informe seu nome completo.");
-            setIsAuthenticating(false);
-            return;
-          }
-          if (!clientPassword || clientPassword.length < 3) {
-            setAuthError("Crie uma senha de acesso com no mínimo 3 dígitos.");
-            setIsAuthenticating(false);
-            return;
-          }
-
-          const newClient: SalonClient = {
-            id: `cli-${Date.now()}`,
-            name: clientName.trim(),
-            phone: clientPhone.trim(),
-            password: clientPassword.trim(),
-            createdAt: new Date().toISOString(),
-            lastVisitAt: `${selectedDate}T${selectedSlot.time}:00Z`,
-            lastServiceTitle: service.title,
-          };
-
-          const savedClient = await SupabaseDataService.saveClient(newClient);
-          SalonStore.setActiveClient(savedClient);
-          clientToUse = savedClient;
-          setActiveClient(savedClient);
+        if (!clientName.trim()) {
+          setAuthError("Por favor, informe seu nome completo.");
+          setIsAuthenticating(false);
+          return;
         }
+
+        // Criar ou localizar cliente de forma transparente
+        const newClient: SalonClient = {
+          id: `cli-${Date.now()}`,
+          name: clientName.trim(),
+          phone: clientPhone.trim(),
+          password: clientPassword?.trim() || "123456",
+          createdAt: new Date().toISOString(),
+          lastVisitAt: `${selectedDate}T${selectedSlot.time}:00Z`,
+          lastServiceTitle: service.title,
+        };
+
+        const savedClient = await SupabaseDataService.saveClient(newClient);
+        SalonStore.setActiveClient(savedClient);
+        clientToUse = savedClient;
+        setActiveClient(savedClient);
       }
+
 
       // Constrói o agendamento final vinculado à cliente
       const newAppointment: Appointment = {
@@ -489,7 +524,7 @@ export function SlotPicker({
 
   return (
     <div className="w-full">
-      <div className="bg-white rounded-3xl p-4 sm:p-8 border border-[#E7DCCE]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-8 border border-[#E7DCCE]">
         {/* Cabeçalho do Procedimento */}
         <div className="flex items-start justify-between border-b border-[#E7DCCE]/60 pb-5 mb-6">
           <div>
@@ -516,30 +551,30 @@ export function SlotPicker({
         </div>
 
         {/* Resumo das Etapas do Serviço (Ativas vs Pausa Química) */}
-        <div className="mb-6 p-4 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE]">
+        <div className="mb-6 p-3.5 sm:p-4 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE]">
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D] block mb-2">
             Estrutura Técnica do Procedimento ({service.steps.reduce((acc, s) => acc + s.durationMin, 0)} min total):
           </span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {service.steps.map((st, i) => (
               <div
                 key={i}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border ${
+                className={`flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-medium border ${
                   st.type === "active"
                     ? "bg-[#54352a] text-white border-[#38231c]"
                     : "bg-amber-100/90 text-amber-950 border-amber-300 font-semibold"
                 }`}
               >
                 {st.type === "active" ? (
-                  <Clock className="w-3 h-3 text-[#E5C158]" />
+                  <Clock className="w-3 h-3 text-[#E5C158] shrink-0" />
                 ) : (
-                  <Zap className="w-3 h-3 text-amber-600" />
+                  <Zap className="w-3 h-3 text-amber-600 shrink-0" />
                 )}
                 <span>
                   {i + 1}. {st.title} ({st.durationMin}m)
                 </span>
                 {st.type === "pause" && (
-                  <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-bold">
+                  <span className="text-[8.5px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-bold shrink-0">
                     Pausa Química
                   </span>
                 )}
@@ -571,10 +606,13 @@ export function SlotPicker({
             </div>
 
             {/* Pílulas de Dias da Semana Próximos */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 no-scrollbar sm:scrollbar-thin">
               {upcomingDays.map((day) => {
                 const isSelected = selectedDate === day.dateStr;
-                const isDayAvailable = daysList.some((d) => d.date === day.dateStr && d.isOpen);
+                const statusInfo = dayAvailabilityMap[day.dateStr];
+                const isOpen = statusInfo?.isOpen ?? false;
+                const hasSlots = statusInfo?.hasSlots ?? false;
+                const availableCount = statusInfo?.availableCount ?? 0;
 
                 return (
                   <button
@@ -587,9 +625,11 @@ export function SlotPicker({
                     className={`shrink-0 px-3.5 py-2.5 rounded-2xl border text-center transition-all ${
                       isSelected
                         ? "bg-[#2D1914] text-white border-[#2D1914] shadow-md ring-2 ring-[#C59B27]/40"
-                        : isDayAvailable
-                        ? "bg-[#FAF7F2] text-[#2D1914] border-[#C59B27]/40 hover:bg-[#F3ECE1]"
-                        : "bg-white text-stone-500 border-stone-200 hover:bg-stone-50"
+                        : isOpen && hasSlots
+                        ? "bg-[#FAF7F2] text-[#2D1914] border-[#C59B27]/40 hover:bg-[#F3ECE1] hover:border-[#AD841D]"
+                        : isOpen && !hasSlots
+                        ? "bg-rose-50/40 text-stone-700 border-rose-200 hover:bg-rose-50"
+                        : "bg-stone-50 text-stone-500 border-stone-200 hover:bg-amber-50/50 hover:border-amber-300"
                     }`}
                   >
                     <span className="block text-[10px] uppercase font-bold tracking-wider opacity-80">
@@ -603,12 +643,18 @@ export function SlotPicker({
                     </span>
                     <span
                       className={`inline-block text-[8px] font-bold mt-1 px-1.5 py-0.5 rounded-full ${
-                        isDayAvailable
-                          ? "text-emerald-700 bg-emerald-100"
-                          : "text-amber-800 bg-amber-100/70"
+                        !isOpen
+                          ? "text-amber-800 bg-amber-100/90 border border-amber-200/60"
+                          : hasSlots
+                          ? "text-emerald-800 bg-emerald-100 border border-emerald-200 font-bold"
+                          : "text-rose-800 bg-rose-100 border border-rose-200 font-bold"
                       }`}
                     >
-                      {isDayAvailable ? "Vagas" : "Pré-Reserva"}
+                      {!isOpen
+                        ? "Agenda Fechada"
+                        : hasSlots
+                        ? `${availableCount} ${availableCount === 1 ? "Vaga" : "Vagas"}`
+                        : "Esgotado"}
                     </span>
                   </button>
                 );
@@ -616,27 +662,39 @@ export function SlotPicker({
             </div>
           </div>
 
-          {/* Horários Disponíveis ou Card de Pré-Reserva */}
-          {!isDayOpen || allSlots.length === 0 ? (
-            /* CARD DE SOLICITAÇÃO DE PRÉ-RESERVA */
+          {/* Horários Disponíveis ou Card de Encaixe Especial */}
+          {!isDayOpen ? (
+            /* CARD DE SOLICITAÇÃO DE ENCAIXE ESPECIAL (DATA FECHADA) */
             <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#FDF9F0] via-white to-[#FAF4E8] border border-[#C59B27]/40 shadow-sm space-y-4">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#DBAE3B] to-[#C59B27] text-white flex items-center justify-center shrink-0 shadow-sm">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#AD841D] block">
-                    {!isDayOpen ? "Data Especial / Fora da Janela Aberta" : "Todos os Horários Ocupados"}
-                  </span>
-                  <h3 className="text-base font-bold text-[#2D1914]">
-                    Deseja solicitar uma Pré-Reserva para {selectedDate}?
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100/80 border border-amber-200 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider mb-1">
+                    <Calendar className="w-3 h-3 text-[#AD841D]" />
+                    <span>Agenda Fechada para {selectedDate}</span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-[#2D1914]">
+                    Deseja solicitar um Encaixe Especial para este dia?
                   </h3>
                   <p className="text-xs text-[#5E372C] mt-1 leading-relaxed">
-                    {!isDayOpen
-                      ? "A Gleicy ainda não abriu os horários oficiais para este dia. Deixe sua pré-reserva registrada para que ela avalie a possibilidade de abrir uma vaga prioritária para você!"
-                      : "Todas as vagas oficiais deste dia já foram preenchidas. Registre sua pré-reserva para ser a primeira da fila caso surja um encaixe ou desistência!"}
+                    A agenda oficial da Gleicy Ronha não possui horários regulares abertos para esta data (dia de folga ou janela ainda fechada).
                   </p>
                 </div>
+              </div>
+
+              {/* Box explicativo: Como Funciona o Encaixe Especial */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-[#44271F] space-y-1.5">
+                <span className="font-bold text-[#AD841D] flex items-center gap-1.5 text-xs">
+                  <Info className="w-3.5 h-3.5 text-[#C59B27]" />
+                  Como funciona a solicitação de Encaixe Especial?
+                </span>
+                <ul className="text-[11px] text-stone-600 space-y-1 list-disc list-inside">
+                  <li>Você escolhe o período de sua preferência (manhã, tarde ou qualquer horário).</li>
+                  <li>Seu pedido entra com prioridade na fila de avaliação da Gleicy.</li>
+                  <li>A Gleicy analisa a viabilidade técnica e entra em contato com você diretamente pelo WhatsApp para confirmar!</li>
+                </ul>
               </div>
 
               {/* Período de Preferência */}
@@ -727,7 +785,7 @@ export function SlotPicker({
                 </div>
               )}
 
-              {/* Botão de Envio da Pré-Reserva */}
+              {/* Botão de Envio do Encaixe Especial */}
               <div className="flex items-center justify-between pt-2">
                 <button
                   type="button"
@@ -748,7 +806,7 @@ export function SlotPicker({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Solicitar Pré-Reserva nesta Data</span>
+                      <span>Enviar Solicitação de Encaixe Especial</span>
                     </>
                   )}
                 </button>
@@ -761,32 +819,33 @@ export function SlotPicker({
                 <div>
                   <label className="text-xs font-bold text-[#2D1914] flex items-center gap-1.5">
                     <Clock className="w-4 h-4 text-[#C59B27]" />
-                    <span>Horários Disponíveis para este Procedimento:</span>
+                    <span>Horários da Agenda em {selectedDate}:</span>
                   </label>
                   <span className="text-[11px] text-stone-500 block">
-                    {allSlots.length} horários compatíveis em {selectedDate}
+                    {availableSlotsCount} {availableSlotsCount === 1 ? "vaga livre" : "vagas livres"}
                     {encaixesCount > 0 && ` • ${encaixesCount} via Encaixe Otimizado ⚡`}
+                    {occupiedCount > 0 && ` • ${occupiedCount} ocupadas`}
                   </span>
                 </div>
 
                 {/* Filtros de Horário */}
-                <div className="flex items-center gap-1 bg-[#FAF7F2] p-1 rounded-xl border border-[#E7DCCE] text-[11px]">
+                <div className="flex items-center gap-1 bg-[#FAF7F2] p-1 rounded-xl border border-[#E7DCCE] text-[11px] overflow-x-auto no-scrollbar max-w-full shrink-0">
                   <button
                     type="button"
                     onClick={() => setSlotFilter("all")}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
                       slotFilter === "all"
                         ? "bg-white text-[#2D1914] shadow-2xs font-bold"
                         : "text-stone-600 hover:text-stone-900"
                     }`}
                   >
-                    Todos ({allSlots.length})
+                    Todos ({dayGridSlots.length})
                   </button>
                   {encaixesCount > 0 && (
                     <button
                       type="button"
                       onClick={() => setSlotFilter("encaixes")}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                      className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all flex items-center gap-1 ${
                         slotFilter === "encaixes"
                           ? "bg-amber-100 text-amber-900 shadow-2xs font-bold border border-amber-300"
                           : "text-amber-800 hover:bg-amber-50"
@@ -799,7 +858,7 @@ export function SlotPicker({
                   <button
                     type="button"
                     onClick={() => setSlotFilter("manha")}
-                    className={`px-2 py-1 rounded-lg font-medium transition-all flex items-center gap-0.5 ${
+                    className={`px-2 py-1 rounded-lg font-medium whitespace-nowrap transition-all flex items-center gap-0.5 ${
                       slotFilter === "manha"
                         ? "bg-white text-[#2D1914] shadow-2xs font-bold"
                         : "text-stone-600 hover:text-stone-900"
@@ -811,7 +870,7 @@ export function SlotPicker({
                   <button
                     type="button"
                     onClick={() => setSlotFilter("tarde")}
-                    className={`px-2 py-1 rounded-lg font-medium transition-all flex items-center gap-0.5 ${
+                    className={`px-2 py-1 rounded-lg font-medium whitespace-nowrap transition-all flex items-center gap-0.5 ${
                       slotFilter === "tarde"
                         ? "bg-white text-[#2D1914] shadow-2xs font-bold"
                         : "text-stone-600 hover:text-stone-900"
@@ -823,15 +882,70 @@ export function SlotPicker({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto p-1 scrollbar-thin">
+              {/* Legenda visual dos horários */}
+              <div className="flex flex-wrap items-center gap-3 text-[10px] text-stone-500 mb-3 px-1">
+                <div className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  <span>Horário Livre</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                  <span>Encaixe (Início de Pausa Química)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-stone-300 inline-block" />
+                  <span>Ocupado / Indisponível</span>
+                </div>
+              </div>
+
+              {/* Grade de Horários (Disponíveis e Ocupados) */}
+              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-2.5 max-h-64 overflow-y-auto p-1 scrollbar-thin">
                 {filteredSlots.map((slot, idx) => {
                   const isSelected = selectedSlot?.time === slot.time;
+                  const isOccupied = slot.status === "occupied";
+                  const isBreak = slot.status === "break";
+                  const isPast = slot.status === "past";
+                  const isDisabled = !slot.isAvailable;
+
+                  if (isDisabled) {
+                    return (
+                      <div
+                        key={idx}
+                        title={slot.conflictReason || "Horário indisponível devido a outro agendamento"}
+                        className="p-3 rounded-2xl text-xs border text-center flex flex-col items-center justify-center relative bg-stone-100/70 border-stone-200 text-stone-400 cursor-not-allowed select-none opacity-60"
+                      >
+                        <span className="font-bold text-sm text-stone-400 line-through flex items-center justify-center gap-1">
+                          {isBreak ? (
+                            <Clock className="w-3 h-3 text-stone-400" />
+                          ) : (
+                            <Lock className="w-3 h-3 text-stone-400" />
+                          )}
+                          {slot.time}
+                        </span>
+                        <span className="text-[10px] text-stone-400 mt-0.5">
+                          {isBreak ? "Intervalo Almoço" : isPast ? "Horário Passado" : "Ocupado"}
+                        </span>
+                        <span className="mt-1 px-1.5 py-0.5 rounded text-[8px] bg-stone-200 text-stone-600 font-semibold">
+                          Indisponível
+                        </span>
+                      </div>
+                    );
+                  }
 
                   return (
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedSlot(slot)}
+                      onClick={() =>
+                        setSelectedSlot({
+                          time: slot.time,
+                          endTime: slot.endTime,
+                          isEncaixe: slot.isEncaixe,
+                          encaixeWithAppointmentId: slot.encaixeWithAppointmentId,
+                          encaixeDetails: slot.encaixeDetails,
+                          stepBlocks: slot.stepBlocks!,
+                        })
+                      }
                       className={`p-3 rounded-2xl text-xs font-medium border text-center transition-all flex flex-col items-center justify-center relative ${
                         isSelected
                           ? "border-[#C59B27] bg-[#FDF9F0] text-[#2D1914] ring-2 ring-[#C59B27]/40 shadow-sm"
@@ -848,16 +962,43 @@ export function SlotPicker({
                       </span>
 
                       {/* Selo de Encaixe Otimizado durante Pausa Química */}
-                      {slot.isEncaixe && (
+                      {slot.isEncaixe ? (
                         <span className="mt-1.5 px-2 py-0.5 rounded-full text-[9px] bg-gradient-to-r from-amber-200 to-amber-300 text-amber-950 font-extrabold flex items-center gap-1 border border-amber-400 shadow-2xs">
                           <Zap className="w-2.5 h-2.5 text-amber-800 fill-amber-700" />
-                          <span>Encaixe Otimizado</span>
+                          <span>Encaixe (Pausa Química)</span>
+                        </span>
+                      ) : (
+                        <span className="mt-1.5 px-2 py-0.5 rounded-full text-[9px] bg-emerald-50 text-emerald-800 font-semibold flex items-center gap-1 border border-emerald-200">
+                          <Check className="w-2.5 h-2.5 text-emerald-600 stroke-[3]" />
+                          <span>Livre</span>
                         </span>
                       )}
                     </button>
                   );
                 })}
               </div>
+
+              {/* Se o dia estiver aberto mas com 0 vagas livres */}
+              {availableSlotsCount === 0 && (
+                <div className="mt-3 p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2 animate-fade-in">
+                  <div className="flex items-center justify-center gap-1.5 text-amber-900 font-bold text-xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span>Todos os horários oficiais deste dia já foram preenchidos</span>
+                  </div>
+                  <p className="text-[11px] text-[#5E372C] max-w-md mx-auto leading-relaxed">
+                    Deseja registrar uma solicitação de lista de espera para esta data? Se surgir uma desistência ou novo encaixe na agenda, a Gleicy entrará em contato com você via WhatsApp!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRequestPreReservation}
+                    disabled={isSubmittingPreReservation}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white gold-gradient shadow-xs hover:opacity-95 transition-all inline-flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Solicitar Lista de Espera nesta Data</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -923,7 +1064,7 @@ export function SlotPicker({
           )}
 
           {/* Autenticação & Identificação da Cliente (apenas quando há slots abertos) */}
-          {isDayOpen && allSlots.length > 0 && (
+          {isDayOpen && availableSlots.length > 0 && (
             <>
               <div className="border-t border-[#E7DCCE] pt-5 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1007,29 +1148,27 @@ export function SlotPicker({
                     </button>
                   </div>
                 ) : (
-                  /* Formulário de Login ou Cadastro */
+                  /* Formulário Rápido sem Fricção */
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {authMode === "register" && (
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-semibold text-[#2D1914] mb-1">
-                          Seu Nome Completo *
-                        </label>
-                        <div className="relative">
-                          <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
-                          <input
-                            type="text"
-                            required
-                            value={clientName}
-                            onChange={(e) => setClientName(e.target.value)}
-                            placeholder="Ex: Beatriz Lima"
-                            className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
-                          />
-                        </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
+                        Seu Nome Completo *
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
+                        <input
+                          type="text"
+                          required
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder="Ex: Beatriz Lima"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#D8D0BD] text-xs focus:border-[#C7A03A] outline-none bg-white"
+                        />
                       </div>
-                    )}
+                    </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#2D1914] mb-1">
+                      <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
                         WhatsApp com DDD *
                       </label>
                       <div className="relative">
@@ -1039,46 +1178,16 @@ export function SlotPicker({
                           required
                           value={clientPhone}
                           onChange={(e) => setClientPhone(e.target.value)}
-                          placeholder="Ex: (11) 98765-4321"
-                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
+                          placeholder="Ex: (11) 99597-5725"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#D8D0BD] text-xs focus:border-[#C7A03A] outline-none bg-white"
                         />
                       </div>
                       <span className="text-[10px] text-stone-500 mt-0.5 block">
-                        Usado para seu login e lembretes da agenda.
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-[#2D1914] mb-1">
-                        {authMode === "register" ? "Crie sua Senha de Acesso *" : "Sua Senha *"}
-                      </label>
-                      <div className="relative">
-                        <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          required
-                          value={clientPassword}
-                          onChange={(e) => setClientPassword(e.target.value)}
-                          placeholder={authMode === "register" ? "Mínimo 3 dígitos/letras" : "Sua senha"}
-                          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E7DCCE] text-xs focus:border-[#C59B27] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-2.5 text-stone-400 hover:text-stone-700"
-                        >
-                          {showPassword ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-stone-500 mt-0.5 block">
-                        Permite acompanhar propostas e histórico no portal.
+                        Receba a confirmação e lembretes diretamente no seu WhatsApp.
                       </span>
                     </div>
                   </div>
+
                 )}
               </div>
 

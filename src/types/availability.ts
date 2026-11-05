@@ -61,4 +61,7 @@ export interface DayAvailabilityConfig {
   breakStart?: string;
   breakEnd?: string;
   customNotes?: string;
+  isOpen?: boolean;
+  maxClients?: number;
+  slotIntervalMin?: number;
 }

@@ -22,6 +22,7 @@ export interface SalonOrganization {
     requireTriageApprovalHours: number; // ex: 36h
     pixDiscountPercent: number; // ex: 5%
     maxParallelInPause: number; // ex: 1
+    dailyTargetRevenue?: number; // Meta diária de faturamento (ex: R$ 1500)
   };
   createdAt: string;
 }

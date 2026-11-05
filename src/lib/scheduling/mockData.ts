@@ -9,14 +9,14 @@ export const initialOrganization: SalonOrganization = {
   id: "org-gleicy-ronha",
   name: "Espaço da Beleza Gleicy Ronha",
   slug: "gleicyronha",
-  tagline: "Exclusividade & Alta Performance em Cachos e Iluminados",
-  phone: "(11) 98765-4321",
-  address: "Av. Paulista, 1000 - Jardins",
-  city: "São Paulo",
+  tagline: "O cuidado que acolhe. A beleza que encanta.",
+  phone: "(11) 99597-5725",
+  address: "Av. Brasília, 996 - Jardim Saltense",
+  city: "Salto",
   state: "SP",
   theme: {
-    primaryColor: "#54352a", // Chocolate nobre
-    accentColor: "#c59b27",  // Dourado acetinado
+    primaryColor: "#1D3D3C", // Verde profundo oficial
+    accentColor: "#C7A03A",  // Dourado oficial
   },
   settings: {
     isSharedMode: true, // Super Admin toggle

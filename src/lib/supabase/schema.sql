@@ -317,3 +317,24 @@ CREATE POLICY "Staff manage pre reservations" ON public.pre_reservations
 CREATE POLICY "Staff manage availability templates" ON public.availability_templates
     FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+-- ----------------------------------------------------
+-- 10. PUBLICAÇÃO REALTIME (Supabase Realtime Sync)
+-- ----------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.triage_submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.pre_reservations;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.proposals;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.appointments;
+
+ALTER TABLE public.triage_submissions REPLICA IDENTITY FULL;
+ALTER TABLE public.pre_reservations REPLICA IDENTITY FULL;
+ALTER TABLE public.proposals REPLICA IDENTITY FULL;
+ALTER TABLE public.appointments REPLICA IDENTITY FULL;
+
+

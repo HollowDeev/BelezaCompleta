@@ -1,11 +1,18 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { TriageForm, TriageQuestion, TriageSubmission, TriageAnswer } from "@/types/triage";
+import { TriageForm, TriageQuestion, TriageSubmission, TriageAnswer, QuestionOption } from "@/types/triage";
 import { ServiceItem } from "@/types/service";
 import { Appointment } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
-import { calculateAvailableSlots, AvailableSlot } from "@/lib/scheduling/engine";
+import {
+  calculateAvailableSlots,
+  calculateDaySlotGrid,
+  AvailableSlot,
+  DaySlotItem,
+} from "@/lib/scheduling/engine";
+import { AvailableDay, PreferredPeriod } from "@/types/availability";
+import { parseHHmmToMinutes } from "@/lib/utils";
 import { SalonStore } from "@/lib/storage/localStore";
 import { SupabaseDataService } from "@/lib/supabase/api";
 import {
@@ -30,6 +37,7 @@ import {
   CalendarDays,
   AlertCircle,
   Check,
+  Info,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -37,9 +45,18 @@ interface GamifiedTriageProps {
   service: ServiceItem;
   form: TriageForm;
   existingAppointments?: Appointment[];
+  availableDays?: AvailableDay[];
   onComplete: (submission: TriageSubmission) => void;
   onCancel: () => void;
 }
+
+const DEFAULT_CURL_OPTIONS: QuestionOption[] = [
+  { id: "opt-2a", label: "Ondulado (2A, 2B ou 2C)", description: "Ondas suaves em formato de S, raiz mais lisa" },
+  { id: "opt-3a", label: "Cacheado Aberto (3A ou 3B)", description: "Cachos em espiral bem definidos e soltos" },
+  { id: "opt-3c", label: "Cacheado Fechado (3C)", description: "Cachos em espiral estreita e densos" },
+  { id: "opt-4a", label: "Crespo / Afropuff (4A, 4B ou 4C)", description: "Curvatura bem fechada em Z com alto volume natural" },
+  { id: "opt-trans", label: "Em Transição Capilar", description: "Duas texturas presentes (raiz natural e pontas com química)" },
+];
 
 // Próximos 14 dias para o seletor visual
 function getUpcomingDays(count = 14) {
@@ -70,6 +87,7 @@ export function GamifiedTriage({
   service,
   form,
   existingAppointments = [],
+  availableDays: initialAvailableDays,
   onComplete,
   onCancel,
 }: GamifiedTriageProps) {
@@ -89,10 +107,28 @@ export function GamifiedTriage({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Agendamento Dinâmico de Preferência
-  const upcomingDays = useMemo(() => getUpcomingDays(14), []);
-  const [preferredDate, setPreferredDate] = useState(upcomingDays[0]?.dateStr || "2026-10-18");
+  const [upcomingDays, setUpcomingDays] = useState<{
+    dateStr: string;
+    dayNum: number;
+    weekDay: string;
+    month: string;
+    isToday: boolean;
+    isTomorrow: boolean;
+  }[]>([]);
+  const [preferredDate, setPreferredDate] = useState("");
+
+  // Dias com agenda aberta pela profissional
+  const [daysList, setDaysList] = useState<AvailableDay[]>(initialAvailableDays || []);
+  const [preferredPeriod, setPreferredPeriod] = useState<PreferredPeriod>("qualquer");
+
+  useEffect(() => {
+    const days = getUpcomingDays(14);
+    setUpcomingDays(days);
+    setPreferredDate(days[0]?.dateStr || "");
+  }, []);
+
   const [preferredSlot, setPreferredSlot] = useState("09:30");
-  const [selectedSlotObj, setSelectedSlotObj] = useState<AvailableSlot | null>(null);
+  const [selectedSlotObj, setSelectedSlotObj] = useState<AvailableSlot | DaySlotItem | null>(null);
 
   const [uploadedPhotos, setUploadedPhotos] = useState<{
     root?: string;
@@ -111,19 +147,96 @@ export function GamifiedTriage({
     }
   }, []);
 
-  // Cálculo Dinâmico de Slots pelo Motor
-  const availableSlots = useMemo(() => {
-    return calculateAvailableSlots(
+  // Carrega os dias disponíveis da profissional
+  useEffect(() => {
+    if (initialAvailableDays && initialAvailableDays.length > 0) {
+      setDaysList(initialAvailableDays);
+      return;
+    }
+
+    const local = SalonStore.getAvailableDays(service.professionalId || "user-gleicy-ronha");
+    if (local && local.length > 0) {
+      setDaysList(local);
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const futureDate = new Date(Date.now() + 60 * 86400000).toISOString().split("T")[0];
+
+    SupabaseDataService.getAvailableDays(
+      service.professionalId || "user-gleicy-ronha",
+      todayStr,
+      futureDate
+    ).then((remote) => {
+      if (remote && remote.length > 0) {
+        setDaysList(remote);
+      }
+    }).catch(() => {});
+  }, [initialAvailableDays, service.professionalId]);
+
+  // Mapeamento de disponibilidade para as pílulas de dias
+  const dayAvailabilityMap = useMemo(() => {
+    const map: Record<string, { isOpen: boolean; hasSlots: boolean; availableCount: number }> = {};
+    upcomingDays.forEach((day) => {
+      const dConfig = daysList.find((d) => d.date === day.dateStr && d.isOpen);
+      if (!dConfig) {
+        map[day.dateStr] = { isOpen: false, hasSlots: false, availableCount: 0 };
+      } else {
+        const slots = calculateAvailableSlots(
+          service,
+          day.dateStr,
+          service.professionalId || "user-gleicy-ronha",
+          existingAppointments,
+          {
+            openMinutes: parseHHmmToMinutes(dConfig.startTime),
+            closeMinutes: parseHHmmToMinutes(dConfig.endTime),
+            breakStartMinutes: dConfig.breakStart ? parseHHmmToMinutes(dConfig.breakStart) : undefined,
+            breakEndMinutes: dConfig.breakEnd ? parseHHmmToMinutes(dConfig.breakEnd) : undefined,
+            slotIntervalMinutes: 30,
+          }
+        );
+        map[day.dateStr] = {
+          isOpen: true,
+          hasSlots: slots.length > 0,
+          availableCount: slots.length,
+        };
+      }
+    });
+    return map;
+  }, [upcomingDays, daysList, service, existingAppointments]);
+
+  // Configuração do dia selecionado
+  const currentDayConfig = useMemo(() => {
+    return daysList.find((d) => d.date === preferredDate && d.isOpen);
+  }, [daysList, preferredDate]);
+
+  const isDayOpen = Boolean(currentDayConfig);
+
+  // Calcula a grade completa de horários do dia
+  const dayGridSlots = useMemo(() => {
+    if (!isDayOpen) return [];
+
+    const salonConfig = {
+      openMinutes: currentDayConfig ? parseHHmmToMinutes(currentDayConfig.startTime) : 8 * 60 + 30,
+      closeMinutes: currentDayConfig ? parseHHmmToMinutes(currentDayConfig.endTime) : 19 * 60,
+      breakStartMinutes: currentDayConfig?.breakStart ? parseHHmmToMinutes(currentDayConfig.breakStart) : undefined,
+      breakEndMinutes: currentDayConfig?.breakEnd ? parseHHmmToMinutes(currentDayConfig.breakEnd) : undefined,
+      slotIntervalMinutes: 30,
+    };
+
+    return calculateDaySlotGrid(
       service,
       preferredDate,
       service.professionalId || "user-gleicy-ronha",
-      existingAppointments
+      existingAppointments,
+      salonConfig
     );
-  }, [service, preferredDate, existingAppointments]);
+  }, [service, preferredDate, existingAppointments, isDayOpen, currentDayConfig]);
 
-  // Se o slot atual não estiver na lista de disponíveis, seleciona o primeiro
+  const availableSlots = useMemo(() => dayGridSlots.filter((s) => s.isAvailable), [dayGridSlots]);
+
+  // Se o dia estiver aberto e houver slots disponíveis, seleciona o primeiro se o atual não coincidir
   useEffect(() => {
-    if (availableSlots.length > 0) {
+    if (isDayOpen && availableSlots.length > 0) {
       const match = availableSlots.find((s) => s.time === preferredSlot);
       if (!match) {
         setPreferredSlot(availableSlots[0].time);
@@ -131,8 +244,13 @@ export function GamifiedTriage({
       } else {
         setSelectedSlotObj(match);
       }
+    } else if (!isDayOpen) {
+      setSelectedSlotObj(null);
+      if (!preferredSlot.startsWith("Encaixe")) {
+        setPreferredSlot("Encaixe (Flexível)");
+      }
     }
-  }, [availableSlots, preferredSlot]);
+  }, [availableSlots, preferredSlot, isDayOpen]);
 
   const handlePhotoUpload = (slot: "root" | "length" | "inspiration", e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -207,7 +325,7 @@ export function GamifiedTriage({
           isAnswered = Boolean(
             uploadedPhotos.root || uploadedPhotos.length || uploadedPhotos.inspiration
           );
-        } else if (currentQuestion.type === "multiple_choice") {
+        } else if (currentQuestion.type === "multiple_choice" || currentQuestion.allowMultiple) {
           const val = answers[currentQuestion.id];
           isAnswered = Array.isArray(val) && val.length > 0;
         } else {
@@ -216,7 +334,7 @@ export function GamifiedTriage({
         }
 
         if (!isAnswered) {
-          setStepValidationError("⚠️ Por favor, responda esta pergunta para continuar");
+          setStepValidationError("⚠️ Por favor, selecione ou responda esta pergunta para continuar");
           return;
         }
       }
@@ -238,52 +356,45 @@ export function GamifiedTriage({
             return;
           }
 
-          if (authMode === "login") {
-            const loginRes = await SupabaseDataService.loginClient(clientPhone, clientPassword);
-            if (!loginRes.success || !loginRes.client) {
-              setAuthError(loginRes.message || "Telefone ou senha inválidos.");
-              setIsSubmitting(false);
-              return;
-            }
-            clientToUse = loginRes.client;
-            setActiveClient(loginRes.client);
-          } else {
-            if (!clientName.trim()) {
-              setAuthError("Por favor, informe seu nome completo.");
-              setIsSubmitting(false);
-              return;
-            }
-            if (!clientPassword || clientPassword.length < 3) {
-              setAuthError("Crie uma senha de acesso com no mínimo 3 caracteres.");
-              setIsSubmitting(false);
-              return;
-            }
-
-            const newClient: SalonClient = {
-              id: `cli-${Date.now()}`,
-              name: clientName.trim(),
-              phone: clientPhone.trim(),
-              password: clientPassword.trim(),
-              email: clientEmail.trim() || undefined,
-              createdAt: new Date().toISOString(),
-              lastVisitAt: `${preferredDate}T${preferredSlot}:00Z`,
-              lastServiceTitle: service.title,
-            };
-
-            const savedClient = await SupabaseDataService.saveClient(newClient);
-            SalonStore.setActiveClient(savedClient);
-            clientToUse = savedClient;
-            setActiveClient(savedClient);
+          if (!clientName.trim()) {
+            setAuthError("Por favor, informe seu nome completo.");
+            setIsSubmitting(false);
+            return;
           }
+
+          const newClient: SalonClient = {
+            id: `cli-${Date.now()}`,
+            name: clientName.trim(),
+            phone: clientPhone.trim(),
+            password: clientPassword?.trim() || "123456",
+            email: clientEmail.trim() || undefined,
+            createdAt: new Date().toISOString(),
+            lastVisitAt: `${preferredDate}T${preferredSlot}:00Z`,
+            lastServiceTitle: service.title,
+          };
+
+          const savedClient = await SupabaseDataService.saveClient(newClient);
+          SalonStore.setActiveClient(savedClient);
+          clientToUse = savedClient;
+          setActiveClient(savedClient);
         }
 
-        const submissionAnswers: TriageAnswer[] = form.questions.map((q) => {
+
+        const submissionAnswers: TriageAnswer[] = form.questions
+          .filter((q) => q.type !== "photo_upload")
+          .map((q) => {
           const val = answers[q.id];
+          const effectiveOptions =
+            q.options && q.options.length > 0
+              ? q.options
+              : q.type === "curl_pattern"
+              ? DEFAULT_CURL_OPTIONS
+              : [];
           let labels: string[] = [];
           if (Array.isArray(val)) {
-            labels = q.options?.filter((o) => val.includes(o.id)).map((o) => o.label) || [];
+            labels = effectiveOptions.filter((o) => val.includes(o.id)).map((o) => o.label) || [];
           } else if (typeof val === "string") {
-            const opt = q.options?.find((o) => o.id === val);
+            const opt = effectiveOptions.find((o) => o.id === val);
             labels = opt ? [opt.label] : [val];
           }
 
@@ -292,7 +403,7 @@ export function GamifiedTriage({
             questionTitle: q.title,
             selectedOptionIds: Array.isArray(val) ? val : val ? [val] : [],
             selectedOptionLabels: labels,
-            answerText: typeof val === "string" && !q.options ? val : undefined,
+            answerText: typeof val === "string" && effectiveOptions.length === 0 ? val : undefined,
           };
         });
 
@@ -409,7 +520,7 @@ export function GamifiedTriage({
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-4 sm:p-7 border border-[#E7DCCE]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 border border-[#E7DCCE]">
         {/* Passos de Perguntas */}
         {!isIdentificationStep && currentQuestion && (
           <div className="space-y-6">
@@ -428,60 +539,88 @@ export function GamifiedTriage({
               )}
             </div>
 
-            {/* Opções de Escolha Única ou Múltipla */}
-            {(currentQuestion.type === "single_choice" ||
-              currentQuestion.type === "multiple_choice") &&
-              currentQuestion.options && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {currentQuestion.options.map((option) => {
-                    const isMultiple = currentQuestion.type === "multiple_choice";
-                    const isSelected = isMultiple
-                      ? ((answers[currentQuestion.id] as string[]) || []).includes(option.id)
-                      : answers[currentQuestion.id] === option.id;
+            {/* Opções de Escolha Única, Múltipla ou Curvatura */}
+            {(() => {
+              const isOptionsType =
+                currentQuestion.type === "single_choice" ||
+                currentQuestion.type === "multiple_choice" ||
+                currentQuestion.type === "curl_pattern" ||
+                Boolean(currentQuestion.options && currentQuestion.options.length > 0);
 
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() =>
-                          handleSelectOption(currentQuestion.id, option.id, isMultiple)
-                        }
-                        className={`p-4 rounded-2xl border text-left transition-all flex items-start space-x-3 group ${
-                          isSelected
-                            ? "border-[#C59B27] bg-[#FDF9F0] ring-2 ring-[#C59B27]/30 shadow-xs"
-                            : "border-[#E7DCCE] bg-white hover:border-[#AD841D]/50 hover:bg-[#FAF7F2]"
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded-${
-                            isMultiple ? "md" : "full"
-                          } border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+              if (!isOptionsType) return null;
+
+              const displayOptions =
+                currentQuestion.options && currentQuestion.options.length > 0
+                  ? currentQuestion.options
+                  : currentQuestion.type === "curl_pattern"
+                  ? DEFAULT_CURL_OPTIONS
+                  : [];
+
+              if (displayOptions.length === 0) return null;
+
+              const isMultiple =
+                currentQuestion.type === "multiple_choice" || Boolean(currentQuestion.allowMultiple);
+
+              return (
+                <div className="space-y-3">
+                  {isMultiple && (
+                    <div className="flex items-center gap-1.5 text-xs text-[#AD841D] font-bold bg-[#FAF7F2] border border-[#E7DCCE] px-3 py-1.5 rounded-xl w-fit">
+                      <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
+                      <span>Você pode selecionar mais de uma opção</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {displayOptions.map((option) => {
+                      const isSelected = isMultiple
+                        ? ((answers[currentQuestion.id] as string[]) || []).includes(option.id)
+                        : answers[currentQuestion.id] === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            handleSelectOption(currentQuestion.id, option.id, isMultiple)
+                          }
+                          className={`p-4 rounded-2xl border text-left transition-all flex items-start space-x-3 group ${
                             isSelected
-                              ? "border-[#C59B27] bg-[#C59B27] text-white"
-                              : "border-[#D9C4B0] bg-white group-hover:border-[#AD841D]"
+                              ? "border-[#C59B27] bg-[#FDF9F0] ring-2 ring-[#C59B27]/30 shadow-xs"
+                              : "border-[#E7DCCE] bg-white hover:border-[#AD841D]/50 hover:bg-[#FAF7F2]"
                           }`}
                         >
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <div className="flex-1">
-                          <span
-                            className={`text-xs sm:text-sm font-semibold block ${
-                              isSelected ? "text-[#2D1914]" : "text-[#44271F]"
+                          <div
+                            className={`w-5 h-5 rounded-${
+                              isMultiple ? "md" : "full"
+                            } border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              isSelected
+                                ? "border-[#C59B27] bg-[#C59B27] text-white"
+                                : "border-[#D9C4B0] bg-white group-hover:border-[#AD841D]"
                             }`}
                           >
-                            {option.label}
-                          </span>
-                          {option.description && (
-                            <span className="text-[11px] text-stone-500 mt-0.5 block leading-tight">
-                              {option.description}
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <div className="flex-1">
+                            <span
+                              className={`text-xs sm:text-sm font-semibold block ${
+                                isSelected ? "text-[#2D1914]" : "text-[#44271F]"
+                              }`}
+                            >
+                              {option.label}
                             </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                            {option.description && (
+                              <span className="text-[11px] text-stone-500 mt-0.5 block leading-tight">
+                                {option.description}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
+              );
+            })()}
 
             {/* Módulo Especial de Envio de Fotos Reais */}
             {currentQuestion.type === "photo_upload" && (
@@ -693,24 +832,22 @@ export function GamifiedTriage({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {authMode === "register" && (
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-[#2D1914] mb-1">
-                        Seu Nome Completo *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={clientName}
-                        onChange={(e) => setClientName(e.target.value)}
-                        placeholder="Ex: Isa Franca"
-                        className="w-full p-2.5 rounded-xl border border-[#E7DCCE] bg-white text-xs focus:border-[#C59B27] outline-none"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
+                      Seu Nome Completo *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      placeholder="Ex: Beatriz Lima"
+                      className="w-full p-2.5 rounded-xl border border-[#D8D0BD] bg-white text-xs focus:border-[#C7A03A] outline-none"
+                    />
+                  </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#2D1914] mb-1">
+                    <label className="block text-xs font-semibold text-[#1D3D3C] mb-1">
                       WhatsApp com DDD *
                     </label>
                     <input
@@ -718,34 +855,12 @@ export function GamifiedTriage({
                       required
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder="Ex: (11) 98765-4321"
-                      className="w-full p-2.5 rounded-xl border border-[#E7DCCE] bg-white text-xs focus:border-[#C59B27] outline-none"
+                      placeholder="Ex: (11) 99597-5725"
+                      className="w-full p-2.5 rounded-xl border border-[#D8D0BD] bg-white text-xs focus:border-[#C7A03A] outline-none"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#2D1914] mb-1">
-                      {authMode === "register" ? "Crie sua Senha *" : "Sua Senha de Acesso *"}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={clientPassword}
-                        onChange={(e) => setClientPassword(e.target.value)}
-                        placeholder={authMode === "register" ? "Mínimo 3 caracteres" : "Sua senha"}
-                        className="w-full p-2.5 pr-9 rounded-xl border border-[#E7DCCE] bg-white text-xs focus:border-[#C59B27] outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-2 text-stone-400 hover:text-stone-700"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
                 </div>
+
               )}
             </div>
 
@@ -767,10 +882,11 @@ export function GamifiedTriage({
                 </div>
               </div>
 
-              {/* Pílulas de Dias Próximos */}
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                {upcomingDays.slice(0, 10).map((day) => {
+              {/* Pílulas de Dias Próximos com Status Visual */}
+              <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 no-scrollbar sm:scrollbar-thin">
+                {upcomingDays.slice(0, 12).map((day) => {
                   const isSelected = preferredDate === day.dateStr;
+                  const dayStatus = dayAvailabilityMap[day.dateStr] || { isOpen: false, hasSlots: false, availableCount: 0 };
                   return (
                     <button
                       key={day.dateStr}
@@ -786,62 +902,204 @@ export function GamifiedTriage({
                         {day.isToday ? "Hoje" : day.weekDay}
                       </span>
                       <span className="block text-sm font-extrabold">{day.dayNum}</span>
+                      <span
+                        className={`inline-block mt-0.5 text-[8px] font-bold px-1.5 py-0.2 rounded-full ${
+                          isSelected
+                            ? "bg-white/20 text-white"
+                            : !dayStatus.isOpen
+                            ? "bg-stone-100 text-stone-500"
+                            : dayStatus.hasSlots
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {!dayStatus.isOpen
+                          ? "Fechada"
+                          : dayStatus.hasSlots
+                          ? `${dayStatus.availableCount} vagas`
+                          : "Esgotado"}
+                      </span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Grade de Horários Dinâmicos */}
-              <div>
-                <span className="text-[11px] font-semibold text-[#5E372C] block mb-2">
-                  Horários Disponíveis para {service.title} ({availableSlots.length} opções):
-                </span>
-
-                {availableSlots.length === 0 ? (
-                  <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-center text-xs text-stone-500">
-                    Agenda cheia nesta data. Selecione outro dia acima!
+              {/* Quando a data NÃO está aberta: Exibir Solicitação de Encaixe Especial */}
+              {!isDayOpen ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50 to-[#FDF8EE] border border-amber-200 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                        <span>Data Fora da Grade Regular • Solicitação de Encaixe Especial</span>
+                      </h3>
+                      <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                        A agenda regular da Gleicy não está aberta nesta data. No entanto, você pode enviar suas respostas e fotos como uma <strong>Solicitação de Encaixe Especial</strong>. A Gleicy analisará a viabilidade de agenda ou encaixe durante pausas químicas e entrará em contato via WhatsApp.
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-0.5 scrollbar-thin">
-                    {availableSlots.map((slot, idx) => {
-                      const isSelected = preferredSlot === slot.time;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setPreferredSlot(slot.time);
-                            setSelectedSlotObj(slot);
-                          }}
-                          className={`p-2.5 rounded-xl text-xs font-semibold border text-center transition-all flex flex-col items-center justify-center relative ${
-                            isSelected
-                              ? "border-[#C59B27] bg-[#FDF9F0] text-[#2D1914] ring-2 ring-[#C59B27]/40 shadow-xs"
-                              : slot.isEncaixe
-                              ? "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
-                              : "border-[#E7DCCE] bg-white text-[#44271F] hover:bg-[#FAF7F2]"
-                          }`}
-                        >
-                          <span className="font-extrabold">{slot.time}</span>
-                          <span className="text-[9px] text-stone-500">até {slot.endTime}</span>
-                          {slot.isEncaixe && (
-                            <span className="mt-1 px-1 py-0.2 rounded-full text-[8px] bg-amber-200 text-amber-900 font-bold flex items-center gap-0.5">
-                              <Zap className="w-2 h-2 text-amber-700" />
-                              Encaixe
+
+                  <div className="space-y-2 pt-1 border-t border-amber-200/60">
+                    <label className="text-xs font-semibold text-stone-700 block">
+                      Qual período você prefere para o encaixe?
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredPeriod("manha");
+                          setPreferredSlot("Encaixe (Manhã)");
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all ${
+                          preferredPeriod === "manha"
+                            ? "border-amber-600 bg-amber-100/80 font-bold text-amber-950 shadow-xs"
+                            : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                        }`}
+                      >
+                        <Sun className="w-4 h-4 mx-auto mb-1 text-amber-600" />
+                        <span className="text-xs block font-bold">Manhã</span>
+                        <span className="text-[10px] text-stone-400">09h às 12h</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredPeriod("tarde");
+                          setPreferredSlot("Encaixe (Tarde)");
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all ${
+                          preferredPeriod === "tarde"
+                            ? "border-amber-600 bg-amber-100/80 font-bold text-amber-950 shadow-xs"
+                            : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                        }`}
+                      >
+                        <Moon className="w-4 h-4 mx-auto mb-1 text-amber-600" />
+                        <span className="text-xs block font-bold">Tarde</span>
+                        <span className="text-[10px] text-stone-400">13h às 18h</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredPeriod("qualquer");
+                          setPreferredSlot("Encaixe (Flexível)");
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all ${
+                          preferredPeriod === "qualquer"
+                            ? "border-amber-600 bg-amber-100/80 font-bold text-amber-950 shadow-xs"
+                            : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                        }`}
+                      >
+                        <Zap className="w-4 h-4 mx-auto mb-1 text-amber-600" />
+                        <span className="text-xs block font-bold">Flexível</span>
+                        <span className="text-[10px] text-stone-400">Qualquer horário</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Sua solicitação entrará com prioridade para resposta personalizada no WhatsApp após o envio da triagem.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* Quando a data ESTÁ aberta: Exibir Grade Completa (Livres, Ocupados e Encaixes) */
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold text-[#5E372C] block">
+                      Horários para {service.title}:
+                    </span>
+                    <div className="flex items-center gap-3 text-[10px]">
+                      <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                        {availableSlots.length} Livres
+                      </span>
+                      <span className="flex items-center gap-1 text-stone-400 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-stone-300 inline-block" />
+                        {dayGridSlots.filter((s) => s.status === "occupied").length} Ocupados
+                      </span>
+                      {dayGridSlots.some((s) => s.isEncaixe) && (
+                        <span className="flex items-center gap-1 text-amber-700 font-bold">
+                          <Zap className="w-2.5 h-2.5 text-amber-500" />
+                          Encaixe
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {availableSlots.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center text-xs text-amber-900 space-y-1">
+                      <p className="font-bold">Todos os horários desta data estão ocupados.</p>
+                      <p className="text-[11px] text-amber-800">
+                        Selecione outra data acima com vagas disponíveis ou escolha uma data fechada para solicitar encaixe especial.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 max-h-52 overflow-y-auto p-0.5 scrollbar-thin">
+                      {dayGridSlots.map((slot, idx) => {
+                        const isSelected = preferredSlot === slot.time && slot.isAvailable;
+                        const isOccupied = slot.status === "occupied";
+                        const isBreak = slot.status === "break";
+                        const isPast = slot.status === "past";
+                        const isClickable = slot.isAvailable;
+
+                        if (isBreak || isPast) return null;
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            disabled={!isClickable}
+                            onClick={() => {
+                              if (isClickable) {
+                                setPreferredSlot(slot.time);
+                                setSelectedSlotObj(slot);
+                              }
+                            }}
+                            title={isOccupied ? "Horário indisponível: Já existe um atendimento agendado neste período." : slot.conflictReason}
+                            className={`p-2.5 rounded-xl text-xs font-semibold border text-center transition-all flex flex-col items-center justify-center relative ${
+                              isSelected
+                                ? "border-[#C59B27] bg-[#FDF9F0] text-[#2D1914] ring-2 ring-[#C59B27]/40 shadow-xs"
+                                : isOccupied
+                                ? "border-stone-200 bg-stone-100/80 text-stone-400 cursor-not-allowed opacity-60"
+                                : slot.isEncaixe
+                                ? "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                                : "border-[#E7DCCE] bg-white text-[#44271F] hover:bg-[#FAF7F2]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1 font-extrabold">
+                              {isOccupied && <Lock className="w-2.5 h-2.5 text-stone-400" />}
+                              <span>{slot.time}</span>
+                            </div>
+
+                            <span className="text-[9px] text-stone-500">
+                              {isOccupied ? "Ocupado" : `até ${slot.endTime}`}
                             </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
-              {selectedSlotObj?.isEncaixe && (
-                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>
-                    <strong>Horário Otimizado:</strong> Este slot se inicia durante a pausa química de outro atendimento, sem nenhuma espera!
-                  </span>
+                            {slot.isEncaixe && (
+                              <span className="mt-1 px-1.5 py-0.2 rounded-full text-[8px] bg-amber-200 text-amber-900 font-bold flex items-center gap-0.5">
+                                <Zap className="w-2 h-2 text-amber-700" />
+                                Pausa Química
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedSlotObj?.isEncaixe && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Horário Otimizado (Encaixe em Pausa Química):</strong> Este slot se inicia no momento em que outro procedimento entra em tempo de pausa, permitindo seu atendimento com total dedicação e sem espera!
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

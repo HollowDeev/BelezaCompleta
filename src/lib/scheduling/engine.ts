@@ -1,5 +1,6 @@
 import { ServiceItem, ServiceStep } from "@/types/service";
 import { Appointment, ScheduledStepBlock } from "@/types/appointment";
+import { ProposalTechnicalStep } from "@/types/proposal";
 import { formatTimeHHmm, parseHHmmToMinutes } from "@/lib/utils";
 
 export interface AvailableSlot {
@@ -40,7 +41,8 @@ export function buildDayTimeline(
     (a) =>
       a.date === date &&
       (professionalId === "all" || a.professionalId === professionalId) &&
-      a.status !== "cancelled"
+      a.status !== "cancelled" &&
+      a.status !== "pending_proposal"
   );
 
   const blocks: DayTimelineBlock[] = [];
@@ -100,16 +102,35 @@ export function buildDayTimeline(
  * Calcula os horários disponíveis para agendamento, testando encaixes
  * durante as pausas químicas existentes respeitando a tolerância e o limite de 1 paralelo.
  */
+export type SlotStatus = "available" | "encaixe" | "occupied" | "break" | "past";
+
+export interface DaySlotItem {
+  time: string; // HH:mm
+  endTime: string; // HH:mm
+  status: SlotStatus;
+  isAvailable: boolean; // true se 'available' ou 'encaixe'
+  isEncaixe: boolean;
+  encaixeWithAppointmentId?: string;
+  encaixeDetails?: string;
+  conflictReason?: string;
+  stepBlocks?: ScheduledStepBlock[];
+}
+
 export interface SalonScheduleConfig {
   openMinutes?: number; // 08:30 (510 min)
   closeMinutes?: number; // 19:00 (1140 min)
-  slotIntervalMinutes?: number; // Intervalo de busca (15 min)
+  slotIntervalMinutes?: number; // Intervalo de busca (15 ou 30 min)
   maxParallelInPause?: number;
   breakStartMinutes?: number; // Pausa de almoço início em minutos
-  breakEndMinutes?: number;   // Pausa de almoço fim em minutos
+  breakEndMinutes?: number; // Pausa de almoço fim em minutos
 }
 
-export function calculateAvailableSlots(
+/**
+ * Calcula a grade completa de horários de um dia para um serviço,
+ * indicando para cada horário se está disponível, se é encaixe durante pausa química,
+ * ou se está ocupado/bloqueado por agendamento ativo ou almoço.
+ */
+export function calculateDaySlotGrid(
   service: ServiceItem,
   date: string,
   professionalId: string,
@@ -117,14 +138,14 @@ export function calculateAvailableSlots(
   salonConfig: SalonScheduleConfig = {
     openMinutes: 8 * 60 + 30, // 08:30
     closeMinutes: 19 * 60, // 19:00
-    slotIntervalMinutes: 15,
+    slotIntervalMinutes: 30,
     maxParallelInPause: 1,
   }
-): AvailableSlot[] {
+): DaySlotItem[] {
   const config = {
     openMinutes: salonConfig.openMinutes ?? 8 * 60 + 30,
     closeMinutes: salonConfig.closeMinutes ?? 19 * 60,
-    slotIntervalMinutes: salonConfig.slotIntervalMinutes ?? 15,
+    slotIntervalMinutes: salonConfig.slotIntervalMinutes ?? 30,
     maxParallelInPause: salonConfig.maxParallelInPause ?? 1,
     breakStartMinutes: salonConfig.breakStartMinutes,
     breakEndMinutes: salonConfig.breakEndMinutes,
@@ -136,35 +157,80 @@ export function calculateAvailableSlots(
     date
   );
 
-  // Calcula duração total do serviço
-  const totalDuration = service.steps.reduce((sum, s) => sum + s.durationMin, 0);
-  const availableSlots: AvailableSlot[] = [];
+  const totalDuration = service.steps.reduce(
+    (sum, s) => sum + (Number(s.durationMin) || 0),
+    0
+  );
 
-  // Varre o dia de 15 em 15 minutos
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isToday = date === todayStr;
+  const now = new Date();
+  const currentMinutesToday = isToday ? now.getHours() * 60 + now.getMinutes() : -1;
+
+  // Coleta os minutos candidatos do dia:
+  // 1. Minutos regulares com base no intervalo
+  const candidateMinutesSet = new Set<number>();
   for (
-    let candidateStart = config.openMinutes;
-    candidateStart + totalDuration <= config.closeMinutes;
-    candidateStart += config.slotIntervalMinutes
+    let m = config.openMinutes;
+    m + totalDuration <= config.closeMinutes;
+    m += config.slotIntervalMinutes
   ) {
-    // Projeta os blocos do novo serviço começando em candidateStart
+    candidateMinutesSet.add(m);
+  }
+
+  // 2. Início de qualquer pausa química existente no dia (permitindo encaixe exatamente no início da pausa)
+  for (const block of dayTimeline) {
+    if (block.type === "pause") {
+      const pauseStart = block.startMinutes;
+      if (
+        pauseStart >= config.openMinutes &&
+        pauseStart + totalDuration <= config.closeMinutes
+      ) {
+        candidateMinutesSet.add(pauseStart);
+      }
+    }
+  }
+
+  const sortedCandidates = Array.from(candidateMinutesSet).sort((a, b) => a - b);
+  const grid: DaySlotItem[] = [];
+
+  for (const candidateStart of sortedCandidates) {
+    // 1. Checa se o horário já passou hoje
+    if (isToday && candidateStart <= currentMinutesToday) {
+      grid.push({
+        time: formatTimeHHmm(candidateStart),
+        endTime: formatTimeHHmm(candidateStart + totalDuration),
+        status: "past",
+        isAvailable: false,
+        isEncaixe: false,
+        conflictReason: "Horário já passou",
+      });
+      continue;
+    }
+
     let currentCursor = candidateStart;
     const prospectiveSteps: ScheduledStepBlock[] = [];
     let isCollisionDetected = false;
+    let collisionType: "break" | "occupied" = "occupied";
+    let collisionReason: string | undefined;
     let isEncaixe = false;
     let encaixeAptId: string | undefined;
     let encaixeNotes: string | undefined;
 
     for (const step of service.steps) {
       const stepStart = currentCursor;
-      const stepEnd = currentCursor + step.durationMin;
+      const stepEnd = currentCursor + (Number(step.durationMin) || 15);
 
-      // Se colidir com a pausa de almoço da profissional (etapa ativa ou término do serviço)
+      // Colisão com almoço da profissional
       if (
         config.breakStartMinutes !== undefined &&
         config.breakEndMinutes !== undefined &&
-        Math.max(stepStart, config.breakStartMinutes) < Math.min(stepEnd, config.breakEndMinutes)
+        Math.max(stepStart, config.breakStartMinutes) <
+          Math.min(stepEnd, config.breakEndMinutes)
       ) {
         isCollisionDetected = true;
+        collisionType = "break";
+        collisionReason = "Horário de almoço / intervalo";
         break;
       }
 
@@ -179,26 +245,27 @@ export function calculateAvailableSlots(
 
         if (collidingActive) {
           isCollisionDetected = true;
+          collisionType = "occupied";
+          collisionReason = `Horário ocupado (em atendimento com ${collidingActive.clientName})`;
           break;
         }
 
-        // Verifica se essa etapa ativa está ocorrendo DENTRO de uma PAUSA de outro cliente
+        // Verifica se essa etapa ativa está ocorrendo DENTRO de uma PAUSA química de outro cliente
         const overlappingPause = dayTimeline.find(
           (b) =>
             b.type === "pause" &&
             stepStart >= b.startMinutes &&
-            stepEnd <= (b.maxPauseDurationMin ? b.startMinutes + b.maxPauseDurationMin : b.endMinutes)
+            stepEnd <=
+              (b.maxPauseDurationMin
+                ? b.startMinutes + b.maxPauseDurationMin
+                : b.endMinutes)
         );
 
         if (overlappingPause) {
-          // É um encaixe válido dentro da tolerância química!
           isEncaixe = true;
           encaixeAptId = overlappingPause.appointmentId;
           encaixeNotes = `Encaixe otimizado durante a pausa química de ${overlappingPause.clientName}`;
         }
-      } else {
-        // Se a etapa do NOVO serviço for uma PAUSA química:
-        // Pode coexistir com outra pausa, mas não ultrapassar concorrência excessiva
       }
 
       prospectiveSteps.push({
@@ -216,10 +283,21 @@ export function calculateAvailableSlots(
       currentCursor = stepEnd;
     }
 
-    if (!isCollisionDetected) {
-      availableSlots.push({
+    if (isCollisionDetected) {
+      grid.push({
         time: formatTimeHHmm(candidateStart),
         endTime: formatTimeHHmm(candidateStart + totalDuration),
+        status: collisionType,
+        isAvailable: false,
+        isEncaixe: false,
+        conflictReason: collisionReason || "Horário indisponível",
+      });
+    } else {
+      grid.push({
+        time: formatTimeHHmm(candidateStart),
+        endTime: formatTimeHHmm(candidateStart + totalDuration),
+        status: isEncaixe ? "encaixe" : "available",
+        isAvailable: true,
         isEncaixe,
         encaixeWithAppointmentId: encaixeAptId,
         encaixeDetails: encaixeNotes,
@@ -228,5 +306,201 @@ export function calculateAvailableSlots(
     }
   }
 
-  return availableSlots;
+  return grid;
+}
+
+export function calculateAvailableSlots(
+  service: ServiceItem,
+  date: string,
+  professionalId: string,
+  existingAppointments: Appointment[],
+  salonConfig: SalonScheduleConfig = {
+    openMinutes: 8 * 60 + 30, // 08:30
+    closeMinutes: 19 * 60, // 19:00
+    slotIntervalMinutes: 15,
+    maxParallelInPause: 1,
+  }
+): AvailableSlot[] {
+  const grid = calculateDaySlotGrid(
+    service,
+    date,
+    professionalId,
+    existingAppointments,
+    salonConfig
+  );
+
+  return grid
+    .filter((slot) => slot.isAvailable && slot.stepBlocks)
+    .map((slot) => ({
+      time: slot.time,
+      endTime: slot.endTime,
+      isEncaixe: slot.isEncaixe,
+      encaixeWithAppointmentId: slot.encaixeWithAppointmentId,
+      encaixeDetails: slot.encaixeDetails,
+      stepBlocks: slot.stepBlocks!,
+    }));
+}
+
+export interface ProposalFeasibilityResult {
+  isFeasible: boolean;
+  conflictReason?: string;
+  totalDurationMin: number;
+  endTime: string;
+  prospectiveSteps?: ScheduledStepBlock[];
+}
+
+/**
+ * Valida a viabilidade de uma proposta de agendamento em relação à agenda real do salão,
+ * verificando passos ativos contra passos ativos de outros agendamentos e horários de fechamento/almoço.
+ */
+export function validateProposalScheduleFeasibility({
+  date,
+  startTime,
+  technicalSteps,
+  existingAppointments,
+  salonConfig = {
+    openMinutes: 8 * 60 + 30, // 08:30
+    closeMinutes: 19 * 60, // 19:00
+  },
+  ignoreAppointmentId,
+  ignoreTriageSubmissionId,
+  professionalId = "all",
+}: {
+  date: string;
+  startTime: string;
+  technicalSteps: ProposalTechnicalStep[];
+  existingAppointments: Appointment[];
+  salonConfig?: SalonScheduleConfig;
+  ignoreAppointmentId?: string;
+  ignoreTriageSubmissionId?: string;
+  professionalId?: string;
+}): ProposalFeasibilityResult {
+  if (!startTime || !date || !technicalSteps || technicalSteps.length === 0) {
+    return {
+      isFeasible: false,
+      conflictReason: "Data, horário ou etapas do procedimento não informados.",
+      totalDurationMin: 0,
+      endTime: startTime || "00:00",
+    };
+  }
+
+  const startMin = parseHHmmToMinutes(startTime);
+  if (isNaN(startMin)) {
+    return {
+      isFeasible: false,
+      conflictReason: "Horário inicial inválido.",
+      totalDurationMin: 0,
+      endTime: startTime,
+    };
+  }
+
+  const config = {
+    openMinutes: salonConfig.openMinutes ?? 8 * 60 + 30,
+    closeMinutes: salonConfig.closeMinutes ?? 19 * 60,
+    breakStartMinutes: salonConfig.breakStartMinutes,
+    breakEndMinutes: salonConfig.breakEndMinutes,
+  };
+
+  const totalDuration = technicalSteps.reduce(
+    (sum, s) => sum + (Number(s.durationMin) || 0),
+    0
+  );
+  const endMin = startMin + totalDuration;
+  const endTimeStr = formatTimeHHmm(endMin);
+
+  if (startMin < config.openMinutes) {
+    return {
+      isFeasible: false,
+      conflictReason: `O horário de início (${startTime}) é anterior à abertura do salão (${formatTimeHHmm(config.openMinutes)}).`,
+      totalDurationMin: totalDuration,
+      endTime: endTimeStr,
+    };
+  }
+
+  if (endMin > config.closeMinutes) {
+    return {
+      isFeasible: false,
+      conflictReason: `O término do procedimento (${endTimeStr}) ultrapassa o fechamento do salão (${formatTimeHHmm(config.closeMinutes)}). Duração total: ${totalDuration} min.`,
+      totalDurationMin: totalDuration,
+      endTime: endTimeStr,
+    };
+  }
+
+  // Filtra agendamentos existentes no mesmo dia
+  const relevantAppointments = existingAppointments.filter(
+    (a) =>
+      a.date === date &&
+      a.status !== "cancelled" &&
+      a.status !== "pending_proposal" &&
+      (!ignoreAppointmentId || a.id !== ignoreAppointmentId) &&
+      (!ignoreTriageSubmissionId || a.triageSubmissionId !== ignoreTriageSubmissionId)
+  );
+
+  const dayTimeline = buildDayTimeline(
+    relevantAppointments,
+    professionalId,
+    date
+  );
+
+  let currentCursor = startMin;
+  const prospectiveSteps: ScheduledStepBlock[] = [];
+
+  for (const step of technicalSteps) {
+    const stepDuration = Number(step.durationMin) || 0;
+    const stepStart = currentCursor;
+    const stepEnd = currentCursor + stepDuration;
+
+    // Conflito com almoço
+    if (
+      config.breakStartMinutes !== undefined &&
+      config.breakEndMinutes !== undefined &&
+      Math.max(stepStart, config.breakStartMinutes) <
+        Math.min(stepEnd, config.breakEndMinutes)
+    ) {
+      return {
+        isFeasible: false,
+        conflictReason: `A etapa "${step.title}" coincide com o intervalo/almoço da profissional (${formatTimeHHmm(config.breakStartMinutes)} às ${formatTimeHHmm(config.breakEndMinutes)}).`,
+        totalDurationMin: totalDuration,
+        endTime: endTimeStr,
+      };
+    }
+
+    if (step.type === "active") {
+      // Verifica se colide com etapa ATIVA de outro cliente
+      const collidingActive = dayTimeline.find(
+        (b) =>
+          b.type === "active" &&
+          Math.max(stepStart, b.startMinutes) < Math.min(stepEnd, b.endMinutes)
+      );
+
+      if (collidingActive) {
+        return {
+          isFeasible: false,
+          conflictReason: `Conflito técnico na etapa "${step.title}" (${formatTimeHHmm(stepStart)} - ${formatTimeHHmm(stepEnd)}): a profissional já está em atendimento ativo com ${collidingActive.clientName} (${collidingActive.stepTitle} das ${collidingActive.startTime} às ${collidingActive.endTime}).`,
+          totalDurationMin: totalDuration,
+          endTime: endTimeStr,
+        };
+      }
+    }
+
+    prospectiveSteps.push({
+      id: `prop-step-${Date.now()}-${step.id}`,
+      stepId: step.id,
+      stepTitle: step.title,
+      type: step.type,
+      startTime: formatTimeHHmm(stepStart),
+      endTime: formatTimeHHmm(stepEnd),
+      durationMin: stepDuration,
+      isParallelSlotAllowed: step.type === "pause",
+    });
+
+    currentCursor = stepEnd;
+  }
+
+  return {
+    isFeasible: true,
+    totalDurationMin: totalDuration,
+    endTime: endTimeStr,
+    prospectiveSteps,
+  };
 }

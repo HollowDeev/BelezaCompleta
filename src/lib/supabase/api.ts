@@ -14,6 +14,7 @@ import {
   PreferredPeriod,
   PreReservationStatus,
 } from "@/types/availability";
+import { broadcastSync } from "@/lib/sync/syncBus";
 
 
 // Utilitários de Resolução de UUID para integridade com PostgreSQL
@@ -163,6 +164,49 @@ export class SupabaseDataService {
     }
   }
 
+  static async updateUserProfile(
+    userId: string,
+    updates: Partial<UserProfile>
+  ): Promise<void> {
+    SalonStore.updateUserProfile(userId, updates);
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const payload: Record<string, unknown> = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.phone !== undefined) payload.phone = updates.phone;
+      if (updates.specialty !== undefined) payload.specialty = updates.specialty;
+      if (updates.bio !== undefined) payload.bio = updates.bio;
+      if (updates.dashboardMode !== undefined) payload.dashboard_mode = updates.dashboardMode;
+      if (updates.commissionRate !== undefined) payload.commission_rate = updates.commissionRate;
+
+      await supabase
+        .from("profiles")
+        .update(payload)
+        .eq("id", userId);
+    } catch (err) {
+      console.error("Error updating user profile in Supabase", err);
+    }
+  }
+
+  static async updateUserPassword(
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: true };
+    }
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido ao alterar senha";
+      return { success: false, error: msg };
+    }
+  }
+
   // 3. Serviços
   static async getServices(): Promise<ServiceItem[]> {
     if (!isSupabaseConfigured || !supabase) {
@@ -174,9 +218,12 @@ export class SupabaseDataService {
         .select("*, service_steps(*)")
         .order("title", { ascending: true });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.error("Error fetching services from Supabase", error);
         return SalonStore.getServices();
       }
+
+      if (!data) return [];
 
       return data.map((s) => ({
         id: s.id,
@@ -493,9 +540,12 @@ export class SupabaseDataService {
         .select("*, services(title)")
         .order("submitted_at", { ascending: false });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.error("Error fetching triage submissions from Supabase", error);
         return SalonStore.getTriageSubmissions();
       }
+
+      if (!data) return [];
 
       return data.map((s) => ({
         id: s.id,
@@ -508,8 +558,8 @@ export class SupabaseDataService {
         clientEmail: s.client_email,
         preferredDate: s.preferred_date,
         preferredTimeSlot: s.preferred_time_slot,
-        answers: s.answers || [],
-        photos: s.photos || {},
+        answers: Array.isArray(s.answers) ? s.answers : [],
+        photos: (s.photos && typeof s.photos === "object") ? s.photos : {},
         status: s.status,
         submittedAt: s.submitted_at,
         reviewedAt: s.reviewed_at,
@@ -521,9 +571,9 @@ export class SupabaseDataService {
     }
   }
 
-  static async saveTriageSubmission(sub: TriageSubmission): Promise<void> {
+  static async saveTriageSubmission(sub: TriageSubmission): Promise<TriageSubmission> {
     SalonStore.saveTriageSubmission(sub);
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase) return sub;
 
     try {
       let orgId = DEFAULT_ORG_ID;
@@ -540,7 +590,7 @@ export class SupabaseDataService {
         client_phone: sub.clientPhone,
         client_email: sub.clientEmail || null,
         preferred_date: sub.preferredDate || null,
-        preferred_time_slot: sub.preferredTimeSlot || null,
+        preferred_time_slot: sub.preferredTimeSlot ? sub.preferredTimeSlot.slice(0, 30) : null,
         answers: sub.answers,
         photos: sub.photos || {},
         status: sub.status,
@@ -558,17 +608,88 @@ export class SupabaseDataService {
         .single();
 
       if (error) {
-        console.error("Supabase upsert triage_submissions error:", error);
+        console.error("Supabase upsert triage_submissions error:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
         throw new Error(error.message || "Erro ao salvar submissão de triagem.");
       }
 
-      if (data) {
-        SalonStore.saveTriageSubmission({ ...sub, id: data.id });
+      const savedResult = data ? { ...sub, id: data.id } : sub;
+      SalonStore.saveTriageSubmission(savedResult);
+
+      // Auto-cadastra/atualiza cliente no CRM de clientes
+      if (savedResult.clientPhone && savedResult.clientName) {
+        this.saveClient({
+          id: `cli-${Date.now()}`,
+          orgId: savedResult.orgId || DEFAULT_ORG_ID,
+          name: savedResult.clientName.trim(),
+          phone: savedResult.clientPhone.trim(),
+          email: savedResult.clientEmail?.trim(),
+          createdAt: savedResult.submittedAt || new Date().toISOString(),
+          lastServiceTitle: savedResult.serviceTitle,
+        }).catch((e) => console.warn("Auto-register client from triage error:", e));
       }
+
+      broadcastSync("triage_saved", savedResult.id);
+      return savedResult;
     } catch (err) {
       console.error("Error saving triage submission in Supabase", err);
-      throw err;
+      return sub;
     }
+  }
+
+  // Helper para mapear propostas do Supabase e desempacotar metadados de agendamento
+  private static mapProposal(p: any): LuxuryProposal {
+    let schedulingDetails = p.scheduling_details;
+    let items = p.items || [];
+    if (Array.isArray(items)) {
+      const envelope = items.find(
+        (it: any) => it && (it.__isSchedulingEnvelope || it.id === "__scheduling_envelope__")
+      );
+      if (envelope) {
+        if (!schedulingDetails) {
+          schedulingDetails = envelope.schedulingDetails;
+        }
+        items = items.filter(
+          (it: any) => !(it.__isSchedulingEnvelope || it.id === "__scheduling_envelope__")
+        );
+      }
+    }
+
+    return {
+      id: p.id,
+      orgId: p.org_id,
+      professionalId: p.professional_id,
+      appointmentId: p.appointment_id,
+      triageSubmissionId: p.triage_submission_id,
+      templateId: p.template_id,
+      clientName: p.client_name,
+      clientPhone: p.client_phone,
+      clientEmail: p.client_email,
+      title: p.title,
+      subtitle: p.subtitle,
+      projectOverview: p.project_overview,
+      desiredResults: p.desired_results || [],
+      chosenTechnique: p.chosen_technique,
+      maintenanceGuidance: p.maintenance_guidance,
+      includedItems: p.included_items || [],
+      differentials: p.differentials || [],
+      technicalCommitment: p.technical_commitment,
+      items: items,
+      totalOriginal: Number(p.total_original),
+      totalWithDiscount: Number(p.total_with_discount),
+      pixDiscountPercent: Number(p.pix_discount_percent || 5),
+      pixTotal: Number(p.pix_total),
+      creditCardTerms: "Valor integral, sujeito às condições de parcelamento.",
+      schedulingDetails: schedulingDetails || undefined,
+      status: p.status,
+      expiresAt: p.expires_at,
+      createdAt: p.created_at,
+      approvedAt: p.approved_at,
+    };
   }
 
   // 6. Propostas
@@ -582,38 +703,13 @@ export class SupabaseDataService {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.error("Error fetching proposals from Supabase", error);
         return SalonStore.getProposals();
       }
 
-      return data.map((p) => ({
-        id: p.id,
-        orgId: p.org_id,
-        professionalId: p.professional_id,
-        triageSubmissionId: p.triage_submission_id,
-        clientName: p.client_name,
-        clientPhone: p.client_phone,
-        clientEmail: p.client_email,
-        title: p.title,
-        subtitle: p.subtitle,
-        projectOverview: p.project_overview,
-        desiredResults: p.desired_results || [],
-        chosenTechnique: p.chosen_technique,
-        maintenanceGuidance: p.maintenance_guidance,
-        includedItems: p.included_items || [],
-        differentials: p.differentials || [],
-        technicalCommitment: p.technical_commitment,
-        items: p.items || [],
-        totalOriginal: Number(p.total_original),
-        totalWithDiscount: Number(p.total_with_discount),
-        pixDiscountPercent: Number(p.pix_discount_percent || 5),
-        pixTotal: Number(p.pix_total),
-        creditCardTerms: "Valor integral, sujeito às condições de parcelamento.",
-        status: p.status,
-        expiresAt: p.expires_at,
-        createdAt: p.created_at,
-        approvedAt: p.approved_at,
-      }));
+      if (!data) return [];
+      return data.map((p) => this.mapProposal(p));
     } catch (err) {
       console.error("Error fetching proposals from Supabase", err);
       return SalonStore.getProposals();
@@ -621,13 +717,53 @@ export class SupabaseDataService {
   }
 
   static async getProposalById(id: string): Promise<LuxuryProposal | undefined> {
+    if (isSupabaseConfigured && supabase && isUuid(id)) {
+      try {
+        const { data, error } = await supabase
+          .from("proposals")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (data && !error) {
+          return this.mapProposal(data);
+        }
+      } catch (e) {
+        console.warn("Direct proposal query failed, falling back to cached list", e);
+      }
+    }
     const list = await this.getProposals();
     return list.find((p) => p.id === id);
   }
 
-  static async saveProposal(prop: LuxuryProposal): Promise<void> {
+  static async getProposalsByClientPhone(phone: string): Promise<LuxuryProposal[]> {
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (!cleanPhone) return [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("proposals")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          return data
+            .filter((p) => (p.client_phone || "").replace(/\D/g, "").includes(cleanPhone))
+            .map((p) => this.mapProposal(p));
+        }
+      } catch (e) {
+        console.warn("Direct getProposalsByClientPhone query failed, falling back to cached list", e);
+      }
+    }
+
+    const list = await this.getProposals();
+    return list.filter((p) => (p.clientPhone || "").replace(/\D/g, "").includes(cleanPhone));
+  }
+
+  static async saveProposal(prop: LuxuryProposal): Promise<LuxuryProposal> {
     SalonStore.saveProposal(prop);
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase) return prop;
 
     try {
       let orgId = DEFAULT_ORG_ID;
@@ -642,6 +778,18 @@ export class SupabaseDataService {
         professionalId = sessionData?.session?.user?.id && isUuid(sessionData.session.user.id)
           ? sessionData.session.user.id
           : DEFAULT_GLEICY_ID;
+      }
+
+      // Empacota schedulingDetails de modo defensivo dentro de items
+      const itemsToPersist = Array.isArray(prop.items) ? [...prop.items] : [];
+      if (prop.schedulingDetails) {
+        itemsToPersist.push({
+          id: "__scheduling_envelope__",
+          serviceTitle: "__scheduling_envelope__",
+          originalPrice: 0,
+          __isSchedulingEnvelope: true,
+          schedulingDetails: prop.schedulingDetails,
+        } as any);
       }
 
       const payload: Record<string, unknown> = {
@@ -660,7 +808,7 @@ export class SupabaseDataService {
         included_items: prop.includedItems || [],
         differentials: prop.differentials || [],
         technical_commitment: prop.technicalCommitment || null,
-        items: prop.items || [],
+        items: itemsToPersist,
         total_original: Number(prop.totalOriginal) || 0,
         total_with_discount: Number(prop.totalWithDiscount) || 0,
         pix_discount_percent: Number(prop.pixDiscountPercent) || 5,
@@ -685,35 +833,176 @@ export class SupabaseDataService {
         throw new Error(error.message || "Erro ao salvar proposta no banco de dados.");
       }
 
-      if (data) {
-        SalonStore.saveProposal({ ...prop, id: data.id });
-      }
+      const savedResult = data ? this.mapProposal(data) : prop;
+      SalonStore.saveProposal(savedResult);
+      broadcastSync("proposal_saved", savedResult.id);
+      return savedResult;
     } catch (err) {
       console.error("Error saving proposal in Supabase", err);
-      throw err;
+      return prop;
     }
   }
 
-  static async approveProposal(proposalId: string): Promise<void> {
-    SalonStore.approveProposal(proposalId);
+  static async approveProposal(
+    proposalId: string,
+    options?: { chosenDate?: string; chosenTime?: string }
+  ): Promise<void> {
+    SalonStore.approveProposal(proposalId, options);
     if (!isSupabaseConfigured || !supabase) return;
 
     try {
       const now = new Date().toISOString();
-      await supabase
-        .from("proposals")
-        .update({ status: "approved", approved_at: now })
-        .eq("id", proposalId);
+      const prop = await this.getProposalById(proposalId);
 
-      await supabase
+      const finalDate =
+        options?.chosenDate ||
+        prop?.schedulingDetails?.confirmedDate ||
+        prop?.schedulingDetails?.suggestedDateStart;
+      const finalTime =
+        options?.chosenTime ||
+        prop?.schedulingDetails?.confirmedTime ||
+        prop?.schedulingDetails?.suggestedTime ||
+        "09:00";
+
+      // Se a cliente escolheu nova data/hora, empacota e atualiza a proposta
+      if (options?.chosenDate && prop) {
+        if (!prop.schedulingDetails) {
+          prop.schedulingDetails = {
+            status: "accepted_original",
+            originalDate: options.chosenDate,
+            originalTime: options.chosenTime || "09:00",
+          };
+        }
+        prop.schedulingDetails.clientChosenDate = options.chosenDate;
+        prop.schedulingDetails.confirmedDate = options.chosenDate;
+        if (options.chosenTime) {
+          prop.schedulingDetails.clientChosenTime = options.chosenTime;
+          prop.schedulingDetails.confirmedTime = options.chosenTime;
+        }
+        await this.saveProposal({
+          ...prop,
+          status: "approved",
+          approvedAt: now,
+        });
+      } else {
+        await supabase
+          .from("proposals")
+          .update({ status: "approved", approved_at: now })
+          .eq("id", proposalId);
+      }
+
+      // 1. Atualiza agendamento associado por proposal_id
+      const aptUpdate: Record<string, unknown> = {
+        status: "confirmed",
+        payment_status: "paid",
+        proposal_id: proposalId,
+      };
+      if (finalDate) aptUpdate.date = finalDate;
+      if (finalTime) aptUpdate.start_time = finalTime;
+
+      const { data: updatedApts } = await supabase
         .from("appointments")
-        .update({ status: "confirmed", payment_status: "paid" })
-        .eq("proposal_id", proposalId);
+        .update(aptUpdate)
+        .eq("proposal_id", proposalId)
+        .select();
 
-      await supabase
-        .from("triage_submissions")
-        .update({ status: "approved" })
-        .eq("proposal_id", proposalId);
+      // 2. Se não atualizou por proposal_id, tenta por triage_submission_id
+      let hadExistingApt = Boolean(updatedApts && updatedApts.length > 0);
+      if (!hadExistingApt && prop?.triageSubmissionId) {
+        const { data: updatedByTriage } = await supabase
+          .from("appointments")
+          .update(aptUpdate)
+          .eq("triage_submission_id", prop.triageSubmissionId)
+          .select();
+        if (updatedByTriage && updatedByTriage.length > 0) {
+          hadExistingApt = true;
+        }
+      }
+
+      // 3. Se ainda assim não existe agendamento nenhum, cria agendamento confirmado no banco
+      if (!hadExistingApt && prop && finalDate && finalTime) {
+        const serviceTitle =
+          prop.items?.[0]?.serviceTitle || prop.subtitle || "Procedimento Personalizado";
+
+        const totalDurationMin = prop.schedulingDetails?.totalDurationMin || 180;
+        const [startH, startM] = (finalTime || "09:00").split(":").map(Number);
+        const totalStartMin = (startH || 9) * 60 + (startM || 0);
+        const totalEndMin = totalStartMin + totalDurationMin;
+        const endH = Math.floor(totalEndMin / 60) % 24;
+        const endM = totalEndMin % 60;
+        const computedEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+        let currentStepMin = totalStartMin;
+        const stepBlocks = (prop.schedulingDetails?.technicalSteps || []).map((s, idx) => {
+          const sStartH = Math.floor(currentStepMin / 60) % 24;
+          const sStartM = currentStepMin % 60;
+          const sStartTime = `${String(sStartH).padStart(2, "0")}:${String(sStartM).padStart(2, "0")}`;
+          const dur = Number(s.durationMin) || 30;
+          currentStepMin += dur;
+          const sEndH = Math.floor(currentStepMin / 60) % 24;
+          const sEndM = currentStepMin % 60;
+          const sEndTime = `${String(sEndH).padStart(2, "0")}:${String(sEndM).padStart(2, "0")}`;
+
+          return {
+            id: `step-${s.id || idx}-${Date.now()}`,
+            stepId: s.id,
+            stepTitle: s.title,
+            type: s.type,
+            startTime: sStartTime,
+            endTime: sEndTime,
+            durationMin: dur,
+            isParallelSlotAllowed: s.type === "pause",
+          };
+        });
+
+        await this.saveAppointment({
+          id: `apt-prop-${Date.now()}`,
+          orgId: prop.orgId || DEFAULT_ORG_ID,
+          professionalId: prop.professionalId || DEFAULT_GLEICY_ID,
+          professionalName: "Gleicy Ronha",
+          serviceId: "srv-custom",
+          serviceTitle: serviceTitle,
+          clientName: prop.clientName,
+          clientPhone: prop.clientPhone,
+          clientEmail: prop.clientEmail,
+          date: finalDate,
+          startTime: finalTime,
+          endTime: computedEndTime,
+          totalDurationMin: totalDurationMin,
+          status: "confirmed",
+          stepBlocks,
+          price: prop.totalWithDiscount || prop.pixTotal,
+          paymentStatus: "paid",
+          proposalId: prop.id,
+          triageSubmissionId: prop.triageSubmissionId,
+          createdAt: now,
+        });
+      }
+
+      // 4. Atualiza triagem se houver
+      if (prop?.triageSubmissionId) {
+        await supabase
+          .from("triage_submissions")
+          .update({ status: "approved", proposal_id: proposalId })
+          .eq("id", prop.triageSubmissionId);
+
+        // Atualiza pré-reserva associada para converted
+        await supabase
+          .from("pre_reservations")
+          .update({ status: "converted", updated_at: now })
+          .eq("triage_submission_id", prop.triageSubmissionId);
+      }
+
+      // 5. Atualiza pré-reserva associada por telefone e data
+      if (prop?.clientPhone && finalDate) {
+        await supabase
+          .from("pre_reservations")
+          .update({ status: "converted", updated_at: now })
+          .eq("client_phone", prop.clientPhone)
+          .eq("requested_date", finalDate);
+      }
+
+      broadcastSync("proposal_approved", proposalId);
     } catch (err) {
       console.error("Error approving proposal in Supabase", err);
     }
@@ -768,9 +1057,12 @@ export class SupabaseDataService {
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.error("Error fetching appointments from Supabase", error);
         return SalonStore.getAppointments();
       }
+
+      if (!data) return [];
 
       return data.map((a) => ({
         id: a.id,
@@ -802,9 +1094,9 @@ export class SupabaseDataService {
     }
   }
 
-  static async saveAppointment(apt: Appointment): Promise<void> {
+  static async saveAppointment(apt: Appointment): Promise<Appointment> {
     SalonStore.saveAppointment(apt);
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase) return apt;
 
     try {
       let orgId = DEFAULT_ORG_ID;
@@ -844,6 +1136,21 @@ export class SupabaseDataService {
 
       if (isUuid(apt.id)) {
         payload.id = apt.id;
+      } else {
+        // Blindagem contra duplicidade: se já houver agendamento ativo para a mesma data, horário e cliente, reutiliza o ID
+        const { data: existingApt } = await supabase
+          .from("appointments")
+          .select("id")
+          .eq("org_id", orgId)
+          .eq("date", apt.date)
+          .eq("start_time", apt.startTime)
+          .eq("client_name", apt.clientName)
+          .neq("status", "cancelled")
+          .maybeSingle();
+
+        if (existingApt?.id) {
+          payload.id = existingApt.id;
+        }
       }
 
       const { data, error } = await supabase
@@ -857,12 +1164,27 @@ export class SupabaseDataService {
         throw new Error(error.message || "Erro ao salvar agendamento no banco de dados.");
       }
 
-      if (data) {
-        SalonStore.saveAppointment({ ...apt, id: data.id });
+      const savedResult = data ? { ...apt, id: data.id } : apt;
+      SalonStore.saveAppointment(savedResult);
+
+      if (savedResult.clientPhone && savedResult.clientName) {
+        this.saveClient({
+          id: `cli-${Date.now()}`,
+          orgId: savedResult.orgId || DEFAULT_ORG_ID,
+          name: savedResult.clientName.trim(),
+          phone: savedResult.clientPhone.trim(),
+          email: savedResult.clientEmail?.trim(),
+          createdAt: savedResult.createdAt || new Date().toISOString(),
+          lastServiceTitle: savedResult.serviceTitle,
+          lastVisitAt: savedResult.date ? `${savedResult.date}T10:00:00Z` : undefined,
+        }).catch((e) => console.warn("Auto-register client from appointment error:", e));
       }
+
+      broadcastSync("appointment_saved", savedResult.id);
+      return savedResult;
     } catch (err) {
       console.error("Error saving appointment in Supabase", err);
-      throw err;
+      return apt;
     }
   }
 
@@ -878,10 +1200,11 @@ export class SupabaseDataService {
           .select("*")
           .order("created_at", { ascending: false });
 
-        if (error || !data || data.length === 0) {
+        if (error) {
+          console.error("Error fetching salon_clients from Supabase", error);
           clients = SalonStore.getClients();
         } else {
-          clients = data.map((c) => ({
+          clients = (data || []).map((c) => ({
             id: c.id,
             orgId: c.org_id,
             name: c.name,
@@ -899,8 +1222,74 @@ export class SupabaseDataService {
       }
     }
 
+    // Harmoniza clientes que enviaram triagens, pré-reservas ou agendamentos
+    const [appointments, triages, preRes] = await Promise.all([
+      this.getAppointments().catch(() => []),
+      this.getTriageSubmissions().catch(() => []),
+      this.getPreReservations(DEFAULT_ORG_ID).catch(() => []),
+    ]);
+
+    const knownPhones = new Set<string>(clients.map((c) => c.phone.replace(/\D/g, "")));
+
+    // Extrai clientes de pré-reservas que ainda não estavam na lista
+    for (const pr of preRes) {
+      const clean = (pr.clientPhone || "").replace(/\D/g, "");
+      if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
+        knownPhones.add(clean);
+        const autoClient: SalonClient = {
+          id: `cli-pre-${pr.id}`,
+          orgId: pr.orgId,
+          name: pr.clientName,
+          phone: clean,
+          email: pr.clientEmail,
+          createdAt: pr.createdAt || new Date().toISOString(),
+          lastServiceTitle: pr.serviceName,
+        };
+        clients.push(autoClient);
+        this.saveClient(autoClient).catch(() => {});
+      }
+    }
+
+    // Extrai clientes de triagens que ainda não estavam na lista
+    for (const sub of triages) {
+      const clean = (sub.clientPhone || "").replace(/\D/g, "");
+      if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
+        knownPhones.add(clean);
+        const autoClient: SalonClient = {
+          id: `cli-sub-${sub.id}`,
+          orgId: sub.orgId,
+          name: sub.clientName,
+          phone: clean,
+          email: sub.clientEmail,
+          createdAt: sub.submittedAt || new Date().toISOString(),
+          lastServiceTitle: sub.serviceTitle,
+        };
+        clients.push(autoClient);
+        this.saveClient(autoClient).catch(() => {});
+      }
+    }
+
+    // Extrai clientes de agendamentos que ainda não estavam na lista
+    for (const apt of appointments) {
+      const clean = (apt.clientPhone || "").replace(/\D/g, "");
+      if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
+        knownPhones.add(clean);
+        const autoClient: SalonClient = {
+          id: `cli-apt-${apt.id}`,
+          orgId: apt.orgId,
+          name: apt.clientName,
+          phone: clean,
+          email: apt.clientEmail,
+          createdAt: apt.createdAt || new Date().toISOString(),
+          lastServiceTitle: apt.serviceTitle,
+          lastVisitAt: apt.date ? `${apt.date}T10:00:00Z` : undefined,
+        };
+        clients.push(autoClient);
+        this.saveClient(autoClient).catch(() => {});
+      }
+    }
+
     // Enriquece com estatísticas de agendamentos reais da cliente
-    const appointments = await this.getAppointments();
     return clients.map((c) => {
       const cleanPhone = c.phone.replace(/\D/g, "");
       const clientApts = appointments.filter(
@@ -927,7 +1316,12 @@ export class SupabaseDataService {
   }
 
   static async saveClient(client: SalonClient): Promise<SalonClient> {
-    const savedLocal = SalonStore.saveClient(client);
+    const cleanPhone = client.phone.replace(/\D/g, "");
+    const normalizedClient: SalonClient = {
+      ...client,
+      phone: cleanPhone || client.phone,
+    };
+    const savedLocal = SalonStore.saveClient(normalizedClient);
     if (!isSupabaseConfigured || !supabase) return savedLocal;
 
     try {
@@ -939,16 +1333,16 @@ export class SupabaseDataService {
 
       const payload: Record<string, unknown> = {
         org_id: orgId,
-        name: client.name,
-        phone: client.phone,
-        password_hash: client.password || "123",
-        email: client.email || null,
-        notes: client.notes || null,
-        last_visit_at: client.lastVisitAt || null,
+        name: normalizedClient.name,
+        phone: cleanPhone || normalizedClient.phone,
+        password_hash: normalizedClient.password || "123",
+        email: normalizedClient.email || null,
+        notes: normalizedClient.notes || null,
+        last_visit_at: normalizedClient.lastVisitAt || null,
       };
 
-      if (isUuid(client.id)) {
-        payload.id = client.id;
+      if (isUuid(normalizedClient.id)) {
+        payload.id = normalizedClient.id;
       }
 
       const { data, error } = await supabase
@@ -962,7 +1356,10 @@ export class SupabaseDataService {
         return savedLocal;
       }
 
-      return data ? { ...client, id: data.id } : savedLocal;
+      const savedResult = data ? { ...normalizedClient, id: data.id } : savedLocal;
+      SalonStore.saveClient(savedResult);
+      broadcastSync("client_saved", savedResult.id);
+      return savedResult;
     } catch (err) {
       console.error("Error saving salon_client in Supabase", err);
       return savedLocal;
@@ -1003,21 +1400,22 @@ export class SupabaseDataService {
 
   static async getAvailableDays(
     professionalId: string,
-    startDate: string,
-    endDate: string
+    startDate?: string,
+    endDate?: string
   ): Promise<AvailableDay[]> {
     const validProfId = resolveValidUuid(professionalId, DEFAULT_GLEICY_ID) || professionalId;
     if (!isSupabaseConfigured || !supabase) {
       return SalonStore.getAvailableDays(validProfId, startDate, endDate);
     }
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('available_days')
         .select('*')
         .eq('professional_id', validProfId)
-        .gte('date', startDate)
-        .lte('date', endDate)
         .order('date', { ascending: true });
+      if (startDate) query = query.gte('date', startDate);
+      if (endDate) query = query.lte('date', endDate);
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []).map(this.mapAvailableDay);
     } catch (err) {
@@ -1053,7 +1451,9 @@ export class SupabaseDataService {
             end_time: day.endTime,
             break_start: day.breakStart || null,
             break_end: day.breakEnd || null,
-            is_open: true,
+            is_open: day.isOpen !== undefined ? day.isOpen : true,
+            max_clients: day.maxClients !== undefined ? Number(day.maxClients) : 8,
+            slot_interval_min: day.slotIntervalMin !== undefined ? Number(day.slotIntervalMin) : 15,
             custom_notes: day.customNotes || null,
             updated_at: new Date().toISOString(),
           },
@@ -1092,7 +1492,9 @@ export class SupabaseDataService {
         end_time: d.endTime,
         break_start: d.breakStart || null,
         break_end: d.breakEnd || null,
-        is_open: true,
+        is_open: d.isOpen !== undefined ? d.isOpen : true,
+        max_clients: d.maxClients !== undefined ? Number(d.maxClients) : 8,
+        slot_interval_min: d.slotIntervalMin !== undefined ? Number(d.slotIntervalMin) : 15,
         custom_notes: d.customNotes || null,
         updated_at: new Date().toISOString(),
       }));
@@ -1165,29 +1567,65 @@ export class SupabaseDataService {
     if (!isSupabaseConfigured || !supabase) return localSaved;
 
     try {
+      // Blindagem contra duplicidade: se já houver pré-reserva aberta para o mesmo telefone e data, reutiliza/atualiza
+      const { data: existingPre } = await supabase
+        .from('pre_reservations')
+        .select('id')
+        .eq('org_id', validOrgId)
+        .eq('client_phone', pr.clientPhone)
+        .eq('requested_date', pr.requestedDate)
+        .neq('status', 'declined')
+        .maybeSingle();
+
+      const prePayload: Record<string, unknown> = {
+        org_id: validOrgId,
+        professional_id: validProfId,
+        service_id: validSrvId || null,
+        client_name: pr.clientName,
+        client_phone: pr.clientPhone,
+        client_email: pr.clientEmail || null,
+        requested_date: pr.requestedDate,
+        preferred_period: pr.preferredPeriod,
+        preferred_time: pr.preferredTime || null,
+        triage_submission_id: resolveValidUuid(pr.triageSubmissionId) || null,
+        admin_notes: (pr as any).reason || pr.adminNotes || null,
+        status: 'pending',
+      };
+
+      if (existingPre?.id) {
+        prePayload.id = existingPre.id;
+      }
+
       const { data, error } = await supabase
         .from('pre_reservations')
-        .insert({
-          org_id: validOrgId,
-          professional_id: validProfId,
-          service_id: validSrvId || null,
-          client_name: pr.clientName,
-          client_phone: pr.clientPhone,
-          client_email: pr.clientEmail || null,
-          requested_date: pr.requestedDate,
-          preferred_period: pr.preferredPeriod,
-          preferred_time: pr.preferredTime || null,
-          triage_submission_id: resolveValidUuid(pr.triageSubmissionId) || null,
-          status: 'pending',
-        })
+        .upsert(prePayload)
         .select()
         .single();
       if (error) throw error;
+      if (pr.clientPhone && pr.clientName) {
+        this.saveClient({
+          id: `cli-${Date.now()}`,
+          orgId: validOrgId,
+          name: pr.clientName.trim(),
+          phone: pr.clientPhone.trim(),
+          email: pr.clientEmail?.trim(),
+          createdAt: new Date().toISOString(),
+          lastServiceTitle: pr.serviceName,
+        }).catch((e) => console.warn("Auto-register client from pre-reservation error:", e));
+      }
+
+      broadcastSync("pre_reservation_saved", data?.id || localSaved?.id);
       return this.mapPreReservation(data);
     } catch (err) {
       console.error('createPreReservation error:', err);
       return localSaved;
     }
+  }
+
+  static async savePreReservation(
+    pr: Omit<PreReservation, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<PreReservation | null> {
+    return this.createPreReservation(pr);
   }
 
   static async updatePreReservationStatus(
@@ -1305,7 +1743,7 @@ export class SupabaseDataService {
       preferredPeriod: (row.preferred_period as PreferredPeriod) || 'qualquer',
       preferredTime: row.preferred_time as string | undefined,
       triageSubmissionId: row.triage_submission_id as string | undefined,
-      status: (row.status as PreReservationStatus) || 'pending',
+      status: (row.status === 'confirmed' ? 'approved' : row.status as PreReservationStatus) || 'pending',
       convertedAppointmentId: row.converted_appointment_id as string | undefined,
       adminNotes: row.admin_notes as string | undefined,
       createdAt: row.created_at as string,
@@ -1331,8 +1769,10 @@ export class SupabaseDataService {
   closeAvailableDay = SupabaseDataService.closeAvailableDay;
   getPreReservations = SupabaseDataService.getPreReservations;
   createPreReservation = SupabaseDataService.createPreReservation;
+  savePreReservation = SupabaseDataService.savePreReservation;
   updatePreReservationStatus = SupabaseDataService.updatePreReservationStatus;
   getAvailabilityTemplates = SupabaseDataService.getAvailabilityTemplates;
   saveAvailabilityTemplate = SupabaseDataService.saveAvailabilityTemplate;
+  getProposalsByClientPhone = SupabaseDataService.getProposalsByClientPhone;
 }
 

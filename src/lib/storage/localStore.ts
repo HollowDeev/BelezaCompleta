@@ -78,6 +78,14 @@ export class SalonStore {
     setStorageItem("profiles", updated);
   }
 
+  static updateUserProfile(userId: string, updates: Partial<UserProfile>): void {
+    const profiles = this.getProfiles();
+    const updated = profiles.map((p) =>
+      p.id === userId ? { ...p, ...updates } : p
+    );
+    setStorageItem("profiles", updated);
+  }
+
   // Serviços
   static getServices(): ServiceItem[] {
     return getStorageItem("services", initialServices);
@@ -250,33 +258,136 @@ export class SalonStore {
    * Aprovação de proposta pela cliente:
    * Atualiza status da proposta para 'approved' e confirma a pré-reserva na agenda!
    */
-  static approveProposal(proposalId: string): { proposal: LuxuryProposal; appointment?: Appointment } {
+  static approveProposal(
+    proposalId: string,
+    options?: { chosenDate?: string; chosenTime?: string }
+  ): { proposal: LuxuryProposal; appointment?: Appointment } {
     const proposals = this.getProposals();
     const propIndex = proposals.findIndex((p) => p.id === proposalId);
     if (propIndex === -1) throw new Error("Proposta não encontrada");
 
-    proposals[propIndex].status = "approved";
-    proposals[propIndex].approvedAt = new Date().toISOString();
+    const prop = proposals[propIndex];
+    prop.status = "approved";
+    prop.approvedAt = new Date().toISOString();
+    if (options?.chosenDate) {
+      if (!prop.schedulingDetails) {
+        prop.schedulingDetails = {
+          status: "accepted_original",
+          originalDate: options.chosenDate,
+          originalTime: options.chosenTime || "09:00",
+        };
+      }
+      prop.schedulingDetails.clientChosenDate = options.chosenDate;
+      prop.schedulingDetails.confirmedDate = options.chosenDate;
+    }
+    if (options?.chosenTime && prop.schedulingDetails) {
+      prop.schedulingDetails.clientChosenTime = options.chosenTime;
+      prop.schedulingDetails.confirmedTime = options.chosenTime;
+    }
     setStorageItem("proposals", proposals);
+
+    const finalDate = options?.chosenDate || prop.schedulingDetails?.confirmedDate || prop.schedulingDetails?.suggestedDateStart;
+    const finalTime = options?.chosenTime || prop.schedulingDetails?.confirmedTime || prop.schedulingDetails?.suggestedTime || "09:00";
 
     // Atualiza agendamento correspondente
     const appointments = this.getAppointments();
-    const aptIndex = appointments.findIndex((a) => a.proposalId === proposalId);
+    let aptIndex = appointments.findIndex((a) => a.proposalId === proposalId);
+    if (aptIndex === -1 && prop.triageSubmissionId) {
+      aptIndex = appointments.findIndex((a) => a.triageSubmissionId === prop.triageSubmissionId);
+    }
     let updatedApt: Appointment | undefined;
 
     if (aptIndex >= 0) {
       appointments[aptIndex].status = "confirmed";
       appointments[aptIndex].paymentStatus = "paid";
+      appointments[aptIndex].proposalId = proposalId;
+      if (finalDate) appointments[aptIndex].date = finalDate;
+      if (finalTime) appointments[aptIndex].startTime = finalTime;
       updatedApt = appointments[aptIndex];
+      setStorageItem("appointments", appointments);
+    } else if (finalDate && finalTime) {
+      // Cria agendamento local confirmado
+      const totalDurationMin = prop.schedulingDetails?.totalDurationMin || 180;
+      const [startH, startM] = (finalTime || "09:00").split(":").map(Number);
+      const totalStartMin = (startH || 9) * 60 + (startM || 0);
+      const totalEndMin = totalStartMin + totalDurationMin;
+      const endH = Math.floor(totalEndMin / 60) % 24;
+      const endM = totalEndMin % 60;
+      const computedEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+      let currentStepMin = totalStartMin;
+      const stepBlocks = (prop.schedulingDetails?.technicalSteps || []).map((s, idx) => {
+        const sStartH = Math.floor(currentStepMin / 60) % 24;
+        const sStartM = currentStepMin % 60;
+        const sStartTime = `${String(sStartH).padStart(2, "0")}:${String(sStartM).padStart(2, "0")}`;
+        const dur = Number(s.durationMin) || 30;
+        currentStepMin += dur;
+        const sEndH = Math.floor(currentStepMin / 60) % 24;
+        const sEndM = currentStepMin % 60;
+        const sEndTime = `${String(sEndH).padStart(2, "0")}:${String(sEndM).padStart(2, "0")}`;
+
+        return {
+          id: `step-${s.id || idx}-${Date.now()}`,
+          stepId: s.id,
+          stepTitle: s.title,
+          type: s.type,
+          startTime: sStartTime,
+          endTime: sEndTime,
+          durationMin: dur,
+          isParallelSlotAllowed: s.type === "pause",
+        };
+      });
+
+      const newApt: Appointment = {
+        id: `apt-${Date.now()}`,
+        orgId: prop.orgId,
+        professionalId: prop.professionalId,
+        professionalName: "Gleicy Ronha",
+        serviceId: "srv-custom",
+        serviceTitle: prop.items?.[0]?.serviceTitle || prop.subtitle || "Procedimento Personalizado",
+        clientName: prop.clientName,
+        clientPhone: prop.clientPhone,
+        clientEmail: prop.clientEmail,
+        date: finalDate,
+        startTime: finalTime,
+        endTime: computedEndTime,
+        totalDurationMin: totalDurationMin,
+        status: "confirmed",
+        stepBlocks,
+        price: prop.totalWithDiscount || prop.pixTotal,
+        paymentStatus: "paid",
+        proposalId: prop.id,
+        triageSubmissionId: prop.triageSubmissionId,
+        createdAt: new Date().toISOString(),
+      };
+      appointments.unshift(newApt);
+      updatedApt = newApt;
       setStorageItem("appointments", appointments);
     }
 
     // Atualiza submissão de triagem se houver
     const submissions = this.getTriageSubmissions();
-    const subIndex = submissions.findIndex((s) => s.proposalId === proposalId);
+    const subIndex = submissions.findIndex(
+      (s) => s.proposalId === proposalId || (prop.triageSubmissionId && s.id === prop.triageSubmissionId)
+    );
     if (subIndex >= 0) {
       submissions[subIndex].status = "approved";
+      submissions[subIndex].proposalId = proposalId;
       setStorageItem("triage_submissions", submissions);
+    }
+
+    // Atualiza pre-reservas locais
+    const preReservations = this.getPreReservations(prop.orgId);
+    const preIndex = preReservations.findIndex(
+      (pr) =>
+        (prop.triageSubmissionId && pr.triageSubmissionId === prop.triageSubmissionId) ||
+        (pr.clientPhone.replace(/\D/g, "") === prop.clientPhone.replace(/\D/g, "") &&
+          pr.status === "pending")
+    );
+    if (preIndex >= 0) {
+      preReservations[preIndex].status = "converted";
+      preReservations[preIndex].convertedAppointmentId = updatedApt?.id;
+      setStorageItem("pre_reservations", preReservations);
     }
 
     return { proposal: proposals[propIndex], appointment: updatedApt };
@@ -326,7 +437,13 @@ export class SalonStore {
     startDate?: string,
     endDate?: string
   ): AvailableDay[] {
-    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    const rawList = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    // Descarta mocks antigos residuais
+    const list = rawList.filter((d) => !d.id?.startsWith("avail-init-"));
+    if (list.length !== rawList.length) {
+      setStorageItem("available_days", list);
+    }
+
     return list.filter((d) => {
       if (d.professionalId && professionalId && d.professionalId !== professionalId) {
         // Aceita se for compatível ou ID padrão
@@ -431,7 +548,19 @@ export class SalonStore {
 
   // Pré-Reservas
   static getPreReservations(orgId: string, status?: string): PreReservation[] {
-    const list = getStorageItem<PreReservation[]>("pre_reservations", initialPreReservations);
+    const rawList = getStorageItem<PreReservation[]>("pre_reservations", initialPreReservations);
+    // Descarta mocks fictícios antigos
+    const legacyMockIds = new Set([
+      "pr-vanessa-guimaraes",
+      "pr-beatriz-mendonca",
+      "pr-camila-silveira",
+      "pr-mariana-rocha-aprovada",
+    ]);
+    const list = rawList.filter((p) => !legacyMockIds.has(p.id));
+    if (list.length !== rawList.length) {
+      setStorageItem("pre_reservations", list);
+    }
+
     if (!status) return list;
     return list.filter((p) => p.status === status);
   }
@@ -513,97 +642,11 @@ export class SalonStore {
   }
 }
 
-// Mock inicial de dias abertos
-export const initialAvailableDays: AvailableDay[] = [
-  // Outubro 2026
-  "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24",
-  "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31",
-  // Novembro 2026
-  "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07",
-  "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14",
-  "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21",
-  "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28",
-].map((date, idx) => ({
-  id: `avail-init-${idx + 1}`,
-  orgId: "11111111-1111-4111-8111-111111111111",
-  professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
-  date,
-  startTime: "09:00",
-  endTime: "19:00",
-  breakStart: "12:30",
-  breakEnd: "13:30",
-  isOpen: true,
-  maxClients: 8,
-  slotIntervalMin: 15,
-  customNotes: "Atendimento presencial com diagnóstico capilar",
-  createdAt: "2026-10-01T00:00:00Z",
-}));
+// Inicialização limpa: dias iniciam fechados por padrão (a Gleicy seleciona os dias para abrir)
+export const initialAvailableDays: AvailableDay[] = [];
 
-// Mock inicial de pré-reservas
-export const initialPreReservations: PreReservation[] = [
-  {
-    id: "pr-vanessa-guimaraes",
-    orgId: "11111111-1111-4111-8111-111111111111",
-    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
-    serviceId: "srv-mechas-platinum",
-    serviceName: "Mechas Platinum & Iluminado",
-    clientName: "Vanessa Guimarães",
-    clientPhone: "(11) 98765-1122",
-    clientEmail: "vanessa.guimaraes@gmail.com",
-    requestedDate: "2026-11-28",
-    preferredPeriod: "tarde",
-    status: "pending",
-    adminNotes: "Casamento da irmã - solicitou abertura especial",
-    createdAt: "2026-10-25T14:20:00Z",
-  },
-  {
-    id: "pr-beatriz-mendonca",
-    orgId: "11111111-1111-4111-8111-111111111111",
-    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
-    serviceId: "srv-iluminado-chocolate",
-    serviceName: "Morena Iluminada Chocolate",
-    clientName: "Beatriz Mendonça",
-    clientPhone: "(11) 97123-4567",
-    clientEmail: "beatriz.mendonca@advocacia.com",
-    requestedDate: "2026-12-05",
-    preferredPeriod: "manha",
-    preferredTime: "09:30",
-    status: "pending",
-    adminNotes: "Formatura de faculdade de Direito",
-    createdAt: "2026-10-26T10:15:00Z",
-  },
-  {
-    id: "pr-camila-silveira",
-    orgId: "11111111-1111-4111-8111-111111111111",
-    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
-    serviceId: "srv-cronograma-luxo",
-    serviceName: "Cronograma Capilar Alta Performance",
-    clientName: "Camila Silveira",
-    clientPhone: "(11) 99887-6543",
-    clientEmail: "camila.silveira@uol.com.br",
-    requestedDate: "2026-12-08",
-    preferredPeriod: "especifico",
-    preferredTime: "14:00",
-    status: "pending",
-    adminNotes: "Viagem de férias para o litoral",
-    createdAt: "2026-10-27T16:45:00Z",
-  },
-  {
-    id: "pr-mariana-rocha-aprovada",
-    orgId: "11111111-1111-4111-8111-111111111111",
-    professionalId: "58f26242-1e53-432e-b924-dea25ee2068a",
-    serviceId: "srv-corte-alinhamento",
-    serviceName: "Corte Geométrico & Alinhamento",
-    clientName: "Mariana Rocha",
-    clientPhone: "(11) 96543-2109",
-    clientEmail: "mariana.rocha@hotmail.com",
-    requestedDate: "2026-11-14",
-    preferredPeriod: "tarde",
-    status: "approved",
-    adminNotes: "Dia aberto e horário confirmado com a cliente",
-    createdAt: "2026-10-22T09:00:00Z",
-  },
-];
+// Inicialização limpa: sem pré-reservas fictícias
+export const initialPreReservations: PreReservation[] = [];
 
 // Mock inicial de templates
 export const initialAvailabilityTemplates: AvailabilityTemplate[] = [

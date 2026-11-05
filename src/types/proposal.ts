@@ -5,6 +5,12 @@ export interface ProposalItem {
   specialPrice?: number;
   explanation?: string;
   moduleType?: "preparatory" | "final";
+  isIncluded?: boolean;
+  durationMin?: number;
+  stepType?: "active" | "pause";
+  isStepItem?: boolean;
+  isPrimordial?: boolean;
+  serviceGroup?: string;
 }
 
 export interface ProposalDifferential {
@@ -28,6 +34,41 @@ export interface ProposalTemplate {
   basePrice: number;
   pixDiscountPercent: number;
   createdAt: string;
+}
+
+export interface ProposalTechnicalStep {
+  id: string;
+  title: string;
+  durationMin: number;
+  type: "active" | "pause";
+  isParallelSlotAllowed?: boolean;
+  isPrimordial?: boolean;
+  serviceGroup?: string;
+}
+
+export type ProposalScheduleStatus =
+  | "accepted_original"
+  | "accepted_encaixe"
+  | "suggested_alternative"
+  | "conflict_reschedule";
+
+export interface ProposalSchedulingDetails {
+  status: ProposalScheduleStatus;
+  originalDate: string;
+  originalTime: string;
+  confirmedDate?: string;
+  confirmedTime?: string;
+  dateSuggestionType?: "exact" | "range" | "same_day_other_time";
+  suggestedDateStart?: string;
+  suggestedDateEnd?: string;
+  suggestedPeriod?: "manha" | "tarde" | "qualquer";
+  suggestedTime?: string;
+  scheduleChangeReason?: string;
+  technicalSteps?: ProposalTechnicalStep[];
+  totalDurationMin?: number;
+  isEncaixe?: boolean;
+  clientChosenDate?: string;
+  clientChosenTime?: string;
 }
 
 export interface LuxuryProposal {
@@ -66,6 +107,16 @@ export interface LuxuryProposal {
   pixTotal: number;
   creditCardTerms: string; // "Valor integral, sujeito às condições de parcelamento e juros da maquininha."
   
+  // Detalhes de Agendamento, Encaixe e Etapas Técnicas
+  schedulingDetails?: ProposalSchedulingDetails;
+
+  // Fotografias de Diagnóstico e Referência da Cliente
+  photos?: {
+    currentHairRoot?: string;
+    currentHairLength?: string;
+    inspirationDesired?: string;
+  };
+
   // Status e Datas
   status: "draft" | "sent" | "approved" | "rejected";
   expiresAt: string;
