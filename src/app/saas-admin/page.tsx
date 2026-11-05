@@ -42,9 +42,9 @@ export default function SaaSAdminPage() {
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
-        router.push("/login");
+        router.replace("/login");
       } else if (role && role !== "super_admin") {
-        router.push("/dashboard");
+        router.replace("/dashboard");
       }
     }
   }, [user, role, authLoading, router]);
@@ -111,13 +111,13 @@ export default function SaaSAdminPage() {
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  if (authLoading || loadingData || !user) {
+  if (authLoading || loadingData || !user || role !== "super_admin") {
     return (
       <div className="min-h-screen bg-[#1E120E] text-[#F5EDE4] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-3 border-[#E5C158] border-t-transparent rounded-full animate-spin" />
           <span className="text-sm font-medium text-[#C4B2A7]">
-            Carregando Painel de Controle SaaS...
+            {!user ? "Verificando credenciais..." : "Carregando Painel de Controle SaaS..."}
           </span>
         </div>
       </div>

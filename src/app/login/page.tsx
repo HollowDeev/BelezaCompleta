@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/supabase/authContext";
-import { Sparkles, Shield, Lock, Mail, ArrowRight, CheckCircle2, Scissors, Building2, User, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, ArrowRight, Scissors, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -16,13 +16,15 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Redirecionamento automático se já estiver logado
+  // Redirecionamento automático se já estiver autenticado
   useEffect(() => {
     if (!authLoading && user && role) {
       if (role === "super_admin") {
-        router.push("/saas-admin");
+        router.replace("/saas-admin");
+      } else if (role === "salon_owner" || role === "professional") {
+        router.replace("/dashboard");
       } else {
-        router.push("/dashboard");
+        router.replace("/");
       }
     }
   }, [user, role, authLoading, router]);
@@ -32,17 +34,15 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMessage(null);
 
-    const res = await signIn(email, password);
+    const res = await signIn(email.trim(), password);
     if (res.error) {
-      setErrorMessage(res.error);
+      setErrorMessage(
+        res.error === "Invalid login credentials"
+          ? "Credenciais inválidas. Verifique seu e-mail e senha."
+          : res.error
+      );
       setIsLoading(false);
     }
-    // O useEffect cuidará do redirecionamento após a atualização do contexto
-  };
-
-  const handleQuickLogin = (quickEmail: string) => {
-    setEmail(quickEmail);
-    setPassword("Glaicy@2026!");
   };
 
   return (
@@ -168,81 +168,15 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Seção de Contas de Teste Rápidas */}
-            <div className="mt-8 pt-6 border-t border-[#28504D]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#D3D0B5]">
-                  Acessos de Teste (1-Clique)
-                </span>
-                <span className="text-[10px] text-[#C7A03A] bg-[#C7A03A]/10 px-2 py-0.5 rounded-full border border-[#C7A03A]/30">
-                  Banco Supabase Ativo
-                </span>
+            {/* Informações de Segurança */}
+            <div className="mt-8 pt-6 border-t border-[#28504D]/60 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#122B2A]/80 border border-[#C7A03A]/20 text-[11px] text-[#D3D0B5]">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#C7A03A]" />
+                <span>Ambiente Administrativo Criptografado</span>
               </div>
-
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("thaua@admin.com")}
-                  className="w-full text-left p-2.5 rounded-xl bg-[#122B2A]/70 hover:bg-[#122B2A] border border-[#28504D] hover:border-[#C7A03A]/60 transition-all flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#C7A03A]/20 flex items-center justify-center text-[#C7A03A]">
-                      <Shield className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-white group-hover:text-[#C7A03A] transition-colors">
-                        Thaua (Super Admin)
-                      </div>
-                      <div className="text-[10px] text-[#D3D0B5]/80">
-                        thaua@admin.com · Acesso Total SaaS
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-[#D3D0B5] group-hover:text-white">Preencher</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("gleicy@salao.com")}
-                  className="w-full text-left p-2.5 rounded-xl bg-[#122B2A]/70 hover:bg-[#122B2A] border border-[#28504D] hover:border-[#C7A03A]/60 transition-all flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#C7A03A]/20 flex items-center justify-center text-[#C7A03A]">
-                      <Building2 className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-white group-hover:text-[#C7A03A] transition-colors">
-                        Gleicy Ronha (Dona)
-                      </div>
-                      <div className="text-[10px] text-[#D3D0B5]/80">
-                        gleicy@salao.com · Painel do Salão
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-[#D3D0B5] group-hover:text-white">Preencher</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("debora@salao.com")}
-                  className="w-full text-left p-2.5 rounded-xl bg-[#122B2A]/70 hover:bg-[#122B2A] border border-[#28504D] hover:border-[#C7A03A]/60 transition-all flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#28504D]/60 flex items-center justify-center text-[#D3D0B5]">
-                      <User className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-white group-hover:text-[#C7A03A] transition-colors">
-                        Débora Santos (Parceira)
-                      </div>
-                      <div className="text-[10px] text-[#D3D0B5]/80">
-                        debora@salao.com · Agenda & Comissões
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-[#D3D0B5] group-hover:text-white">Preencher</span>
-                </button>
-              </div>
+              <p className="text-[11px] text-[#D3D0B5]/60 mt-3">
+                Acesso exclusivo para Gleicy Ronha e profissionais credenciadas.
+              </p>
             </div>
           </div>
         </div>

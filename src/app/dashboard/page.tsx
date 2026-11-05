@@ -165,12 +165,16 @@ export default function DashboardPage() {
     },
   });
 
-  // Verificação de autenticação
+  // Verificação estrita de autenticação e autorização
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.replace("/login");
+      } else if (role === "client") {
+        router.replace("/");
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, role, authLoading, router]);
 
   // Carregamento de dados assíncronos do Supabase
   const refreshAll = async () => {
@@ -212,22 +216,26 @@ export default function DashboardPage() {
     }
   };
 
+  // Só carrega os dados após confirmar que o usuário está autenticado e autorizado
   useEffect(() => {
-    refreshAll();
-  }, []);
+    if (!authLoading && user && role && role !== "client") {
+      refreshAll();
+    }
+  }, [authLoading, user, role]);
 
   // Barramento Instantâneo Local / Cross-Tab (0ms de latência entre abas)
   useEffect(() => {
+    if (authLoading || !user || role === "client") return;
     const unsubscribe = subscribeToSync((payload) => {
       console.log("Realtime syncBus signal received:", payload);
       refreshAll();
     });
     return unsubscribe;
-  }, []);
+  }, [authLoading, user, role]);
 
   // Assinatura em Tempo Real (Supabase Realtime) para Triagens, Agendamentos, Propostas e Pré-Reservas
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase || authLoading || !user || role === "client") return;
 
     const channel = supabase
       .channel("dashboard-realtime-sync")
@@ -324,7 +332,7 @@ export default function DashboardPage() {
         supabase.removeChannel(channel);
       }
     };
-  }, []);
+  }, [authLoading, user, role]);
 
   // Salvar novo agendamento
   const handleSaveNewAppointment = async (newApt: Appointment) => {
@@ -406,11 +414,40 @@ export default function DashboardPage() {
     setAdminTab(tab);
   };
 
-  if (authLoading) {
+  // Proteção visual estrita: se não estiver autenticado ou for perfil de cliente, bloqueia renderização
+  if (authLoading || !user || role === "client") {
     return (
-      <div className="min-h-screen bg-[#FCF5EB] flex flex-col items-center justify-center space-y-4">
+      <div className="min-h-screen bg-[#122B2A] text-[#FCF5EB] flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 rounded-full border-4 border-[#C7A03A] border-t-transparent animate-spin" />
-        <p className="font-editorial text-[#1D3D3C] text-lg">Carregando Painel Operacional...</p>
+        <div className="text-center space-y-1">
+          <p className="font-editorial text-[#FCF5EB] text-lg tracking-wide">
+            {!user ? "Verificando credenciais de acesso seguro..." : "Carregando Painel Operacional..."}
+          </p>
+          <p className="text-xs text-[#D3D0B5]/60 font-sans">
+            Espaço da Beleza Gleicy Ronha · Acesso Restrito à Gestão
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se o usuário autenticado estiver inativo
+  if (profile && profile.isActive === false) {
+    return (
+      <div className="min-h-screen bg-[#122B2A] text-[#FCF5EB] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center mb-4 border border-red-500/30">
+          <Shield className="w-7 h-7" />
+        </div>
+        <h1 className="text-xl font-bold text-white">Acesso Desativado</h1>
+        <p className="text-sm text-[#D3D0B5] mt-2 max-w-sm">
+          Sua conta no Espaço da Beleza Gleicy Ronha está inativa. Entre em contato com a administração.
+        </p>
+        <button
+          onClick={() => signOut().then(() => router.replace("/login"))}
+          className="mt-6 px-5 py-2.5 bg-[#C7A03A] text-[#122B2A] rounded-xl text-xs font-bold hover:bg-[#d9b85f] transition-all"
+        >
+          Retornar ao Login
+        </button>
       </div>
     );
   }

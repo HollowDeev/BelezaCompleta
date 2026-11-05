@@ -107,14 +107,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password = "Glaicy@2026!"): Promise<{ error: string | null }> => {
+  const signIn = async (email: string, password?: string): Promise<{ error: string | null }> => {
     if (!isSupabaseConfigured || !supabase) {
       return { error: "Supabase não está configurado." };
     }
 
+    if (!email || !password) {
+      return { error: "Por favor, preencha o e-mail e a senha." };
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
