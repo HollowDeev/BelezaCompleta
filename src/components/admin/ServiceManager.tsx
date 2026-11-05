@@ -134,7 +134,7 @@ export function ServiceManager({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
           {feedbackMsg && (
             <div className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-medium animate-fade-in shadow-xs">
               {feedbackMsg}
@@ -143,7 +143,7 @@ export function ServiceManager({
 
           <button
             onClick={() => setEditingService(null)}
-            className="px-4 py-2.5 text-xs font-bold text-white brand-green-gradient border border-[#C7A03A]/40 hover:border-[#C7A03A] rounded-xl shadow-xs transition-all flex items-center space-x-1.5 shrink-0 active:scale-95"
+            className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-white brand-green-gradient border border-[#C7A03A]/40 hover:border-[#C7A03A] rounded-xl shadow-xs transition-all flex items-center justify-center space-x-1.5 shrink-0 active:scale-95 touch-manipulation cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#D9B85F]" />
             <span>Novo Serviço</span>
