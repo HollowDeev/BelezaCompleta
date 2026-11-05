@@ -483,9 +483,9 @@ export default function DashboardPage() {
       />
 
       {/* Conteúdo Principal do Painel */}
-      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10 w-full">
         {/* Barra de Topo / Header Principal */}
-        <header className="bg-white/95 backdrop-blur-md border-b border-[#D8D0BD] pl-14 sm:pl-8 pr-3 sm:pr-8 py-2.5 sm:py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-2 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[#C7A03A]/40 after:to-transparent">
+        <header className="bg-white/95 backdrop-blur-md border-b border-[#D8D0BD] pl-16 sm:pl-8 pr-3 sm:pr-8 py-2.5 sm:py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-2 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-[#C7A03A]/40 after:to-transparent">
           <div data-tutorial="header-profile" className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-[#1D3D3C] border border-[#C7A03A]/40 flex items-center justify-center p-1.5 shrink-0 shadow-xs">
               <img
@@ -513,7 +513,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div data-tutorial="header-actions" className="flex items-center gap-2.5 sm:gap-3">
+          <div data-tutorial="header-actions" className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Status do Banco Supabase */}
             <div data-tutorial="header-status" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FAF7F2] border border-[#D8D0BD] text-[#1D3D3C] text-[11px] font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

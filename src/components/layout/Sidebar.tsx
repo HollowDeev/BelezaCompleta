@@ -186,9 +186,11 @@ export function Sidebar({
 
       {/* Sidebar Lateral Principal */}
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen z-40 flex flex-col justify-between bg-[#FCF5EB] border-r border-[#D8D0BD] transition-all duration-300 shadow-sm relative overflow-hidden ${
-          isCollapsed ? "w-20" : "w-64 sm:w-72"
-        } ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        className={`fixed inset-y-0 left-0 h-screen z-50 md:z-30 md:sticky md:top-0 shrink-0 flex flex-col justify-between bg-[#FCF5EB] border-r border-[#D8D0BD] transition-transform duration-300 shadow-2xl md:shadow-xs overflow-hidden ${
+          isCollapsed ? "md:w-20" : "md:w-64 lg:w-72"
+        } w-72 max-w-[85vw] ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
       >
         {/* Marca d'água sutil de pattern no rodapé da Sidebar */}
         <div
