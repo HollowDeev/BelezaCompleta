@@ -62,10 +62,20 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/opengraph-image",
+        url: `${siteUrl}/og-image.jpg?v=2`,
+        secureUrl: `${siteUrl}/og-image.jpg?v=2`,
         width: 1200,
         height: 630,
+        type: "image/jpeg",
         alt: "Espaço da Beleza Gleicy Ronha - Mechas, Loiros e Saúde Capilar",
+      },
+      {
+        url: `${siteUrl}/og-image-square.jpg?v=2`,
+        secureUrl: `${siteUrl}/og-image-square.jpg?v=2`,
+        width: 400,
+        height: 400,
+        type: "image/jpeg",
+        alt: "Espaço da Beleza Gleicy Ronha",
       },
     ],
   },
@@ -74,7 +84,7 @@ export const metadata: Metadata = {
     title: "Espaço da Beleza Gleicy Ronha | Especialista em Mechas e Cachos em Salto - SP",
     description:
       "Salão de beleza de alto padrão em Salto - SP. Mechas seguras, saúde da fibra 100% preservada e atendimento individualizado.",
-    images: ["/opengraph-image"],
+    images: [`${siteUrl}/og-image.jpg?v=2`],
   },
   alternates: {
     canonical: siteUrl,
@@ -148,6 +158,15 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Gwendolyn:wght@400;700&display=swap"
           rel="stylesheet"
         />
+        {/* Meta tags dedicadas para rastreadores de WhatsApp, Telegram e Facebook */}
+        <meta property="og:image" content={`${siteUrl}/og-image.jpg?v=2`} />
+        <meta property="og:image:secure_url" content={`${siteUrl}/og-image.jpg?v=2`} />
+        <meta property="og:image:type" content="image/jpeg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Espaço da Beleza Gleicy Ronha - Mechas, Loiros e Cachos em Salto - SP" />
+        <meta name="twitter:image" content={`${siteUrl}/og-image.jpg?v=2`} />
+
         {/* Schema.org Dados Estruturados para Ranqueamento Google Local */}
         <script
           type="application/ld+json"
