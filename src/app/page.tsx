@@ -422,7 +422,7 @@ export default function ClientHomePage() {
               {/* Linha grafismo 1 */}
               <div className="relative w-36 sm:w-44 h-2.5 mx-auto pointer-events-none opacity-70">
                 <Image
-                  src="/brand/Grafismos/Linha grafismo 1.png"
+                  src="/brand/Grafismos/linha-grafismo-1.png"
                   alt=""
                   fill
                   className="object-contain"

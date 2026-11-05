@@ -63,7 +63,7 @@ export function HeroSection({ organization, onExploreServices, onBookNow }: Hero
               </p>
               <div className="pt-1">
                 <img
-                  src="/brand/Grafismos/Linha grafismo 1.png"
+                  src="/brand/Grafismos/linha-grafismo-1.png"
                   alt="Linha orgânica Gleicy Ronha"
                   className="h-5 sm:h-6 w-auto object-contain opacity-90 select-none pointer-events-none"
                 />

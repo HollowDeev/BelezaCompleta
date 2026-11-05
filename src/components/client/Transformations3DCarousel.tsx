@@ -303,7 +303,7 @@ export function Transformations3DCarousel({
       <div
         className="absolute -top-10 -left-12 w-64 h-96 opacity-20 pointer-events-none select-none"
         style={{
-          backgroundImage: "url('/brand/Grafismos/Linha grafismo 3.png')",
+          backgroundImage: "url('/brand/Grafismos/linha-grafismo-3.png')",
           backgroundRepeat: "no-repeat",
           backgroundSize: "contain",
         }}
@@ -311,7 +311,7 @@ export function Transformations3DCarousel({
       <div
         className="absolute -bottom-12 -right-10 w-64 h-96 opacity-15 pointer-events-none select-none rotate-180"
         style={{
-          backgroundImage: "url('/brand/Grafismos/Linha grafismo 3.png')",
+          backgroundImage: "url('/brand/Grafismos/linha-grafismo-3.png')",
           backgroundRepeat: "no-repeat",
           backgroundSize: "contain",
         }}

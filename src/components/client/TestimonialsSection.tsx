@@ -76,7 +76,7 @@ export function TestimonialsSection() {
       {/* Grafismo lateral de curva orgânica */}
       <div className="absolute right-0 top-1/3 w-36 sm:w-48 h-96 opacity-25 pointer-events-none hidden lg:block">
         <Image
-          src="/brand/Grafismos/Linha grafismo 3.png"
+          src="/brand/Grafismos/linha-grafismo-3.png"
           alt=""
           fill
           className="object-contain object-right"
@@ -116,7 +116,7 @@ export function TestimonialsSection() {
           {/* Grafismo 1 - Linha sutil de apoio sob o título */}
           <div className="relative w-44 sm:w-56 h-3 mx-auto pointer-events-none opacity-80">
             <Image
-              src="/brand/Grafismos/Linha grafismo 1.png"
+              src="/brand/Grafismos/linha-grafismo-1.png"
               alt=""
               fill
               className="object-contain"

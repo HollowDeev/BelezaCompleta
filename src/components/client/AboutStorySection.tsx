@@ -72,7 +72,7 @@ export function AboutStorySection() {
       <div
         className="absolute top-4 left-1/2 -translate-x-1/2 w-full max-w-4xl h-10 opacity-30 pointer-events-none select-none"
         style={{
-          backgroundImage: "url('/brand/Grafismos/Linha grafismo 2.png')",
+          backgroundImage: "url('/brand/Grafismos/linha-grafismo-2.png')",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center",
           backgroundSize: "contain",
@@ -83,7 +83,7 @@ export function AboutStorySection() {
       <div
         className="absolute -bottom-8 -left-8 w-48 h-64 opacity-20 pointer-events-none select-none"
         style={{
-          backgroundImage: "url('/brand/Grafismos/Linha grafismo 4.png')",
+          backgroundImage: "url('/brand/Grafismos/linha-grafismo-4.png')",
           backgroundRepeat: "no-repeat",
           backgroundSize: "contain",
         }}

@@ -203,8 +203,10 @@ export function Sidebar({
             <div className="flex items-center space-x-3 overflow-hidden">
               <div className="w-10 h-10 rounded-2xl bg-[#1D3D3C] border border-[#C7A03A]/40 flex items-center justify-center p-2 shrink-0 shadow-xs">
                 <img
-                  src="/brand/Logotipo/Símbolo isolado/Símbolo dourado.svg"
+                  src="/brand/logo/simbolo-dourado.svg"
                   alt="Gleicy Ronha Símbolo"
+                  width={32}
+                  height={32}
                   className="w-full h-full object-contain"
                 />
               </div>

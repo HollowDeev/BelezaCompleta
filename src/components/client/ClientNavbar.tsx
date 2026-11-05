@@ -87,8 +87,10 @@ export function ClientNavbar({
             {/* Logo horizontal verde profundo oficial em SVG */}
             <div className="relative overflow-hidden py-1 transition-transform duration-300 group-hover:scale-[1.02]">
               <img
-                src="/brand/Logotipo/Símbolo + assinatura/Logo horizontal verde profundo.svg"
+                src="/brand/logo/logo-horizontal-verde.svg"
                 alt="Espaço da Beleza Gleicy Ronha"
+                width={220}
+                height={48}
                 className={`w-auto object-contain transition-all duration-300 ${
                   isScrolled ? "h-8 xs:h-9 sm:h-11" : "h-9 xs:h-10 sm:h-12"
                 }`}

@@ -43,7 +43,7 @@ export function MethodologySection() {
       {/* Grafismo 4 de canto orgânico decorativo */}
       <div className="absolute left-0 bottom-0 w-44 sm:w-60 h-60 opacity-20 pointer-events-none hidden md:block">
         <Image
-          src="/brand/Grafismos/Linha grafismo 4.png"
+          src="/brand/Grafismos/linha-grafismo-4.png"
           alt=""
           fill
           className="object-contain object-left-bottom"
@@ -78,7 +78,7 @@ export function MethodologySection() {
           {/* Grafismo 1 - Linha curva de apoio */}
           <div className="relative w-44 sm:w-56 h-3 mx-auto pointer-events-none opacity-80">
             <Image
-              src="/brand/Grafismos/Linha grafismo 1.png"
+              src="/brand/Grafismos/linha-grafismo-1.png"
               alt=""
               fill
               className="object-contain"

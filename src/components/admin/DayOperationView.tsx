@@ -132,7 +132,7 @@ export function DayOperationView({
             {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
             <div className="relative w-40 sm:w-52 h-3 my-2 opacity-85 pointer-events-none">
               <img
-                src="/brand/Grafismos/Linha grafismo 1.png"
+                src="/brand/Grafismos/linha-grafismo-1.png"
                 alt=""
                 className="w-full h-full object-contain object-left"
               />

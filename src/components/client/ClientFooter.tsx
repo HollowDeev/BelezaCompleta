@@ -99,8 +99,10 @@ export function ClientFooter({ organization, onScrollToSection }: ClientFooterPr
             <div className="space-y-5 lg:col-span-1">
               <div className="block">
                 <img
-                  src="/brand/Logotipo/Símbolo + assinatura/Logo horizontal creme.svg"
+                  src="/brand/logo/logo-horizontal-creme.svg"
                   alt="Espaço da Beleza Gleicy Ronha"
+                  width={220}
+                  height={48}
                   className="h-11 sm:h-12 w-auto object-contain"
                 />
               </div>

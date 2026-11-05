@@ -60,7 +60,7 @@ export function ProposalsManagerView({
           {/* Grafismo Oficial 1 - Linha Orgânica Dourada */}
           <div className="relative w-36 sm:w-44 h-2.5 my-1.5 opacity-80 pointer-events-none">
             <img
-              src="/brand/Grafismos/Linha grafismo 1.png"
+              src="/brand/Grafismos/linha-grafismo-1.png"
               alt=""
               className="w-full h-full object-contain object-left"
             />

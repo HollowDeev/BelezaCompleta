@@ -460,14 +460,14 @@ export default function DashboardPage() {
       {/* Grafismos Oficiais da Marca em Marca d'água no Fundo */}
       <div className="fixed top-0 right-0 w-[440px] h-[440px] opacity-[0.08] pointer-events-none z-0">
         <img
-          src="/brand/Grafismos/Linha grafismo 3.png"
+          src="/brand/Grafismos/linha-grafismo-3.png"
           alt=""
           className="w-full h-full object-contain object-top-right"
         />
       </div>
       <div className="fixed bottom-0 left-72 w-[380px] h-[380px] opacity-[0.05] pointer-events-none z-0 hidden lg:block">
         <img
-          src="/brand/Grafismos/Linha grafismo 4.png"
+          src="/brand/Grafismos/linha-grafismo-4.png"
           alt=""
           className="w-full h-full object-contain object-bottom-left"
         />
@@ -489,7 +489,7 @@ export default function DashboardPage() {
           <div data-tutorial="header-profile" className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-[#1D3D3C] border border-[#C7A03A]/40 flex items-center justify-center p-1.5 shrink-0 shadow-xs">
               <img
-                src="/brand/Logotipo/Símbolo isolado/Símbolo dourado.svg"
+                src="/brand/logo/simbolo-dourado.svg"
                 alt=""
                 className="w-full h-full object-contain"
               />

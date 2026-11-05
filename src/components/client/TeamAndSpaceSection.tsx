@@ -81,7 +81,7 @@ export function TeamAndSpaceSection({
       {/* Grafismo lateral decorativo */}
       <div className="absolute right-0 top-1/4 w-36 sm:w-48 h-96 opacity-20 pointer-events-none hidden lg:block">
         <Image
-          src="/brand/Grafismos/Linha grafismo 3.png"
+          src="/brand/Grafismos/linha-grafismo-3.png"
           alt=""
           fill
           className="object-contain object-right"
@@ -114,7 +114,7 @@ export function TeamAndSpaceSection({
           {/* Grafismo 1 - Linha sutil de apoio sob o título */}
           <div className="relative w-44 sm:w-56 h-3 mx-auto pointer-events-none opacity-80">
             <Image
-              src="/brand/Grafismos/Linha grafismo 1.png"
+              src="/brand/Grafismos/linha-grafismo-1.png"
               alt=""
               fill
               className="object-contain"
