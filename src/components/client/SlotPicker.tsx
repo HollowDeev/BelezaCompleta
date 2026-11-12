@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { ServiceItem } from "@/types/service";
-import { Appointment } from "@/types/appointment";
+import { Appointment, AppointmentProcedureItem } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import { AvailableDay, PreReservation, PreferredPeriod } from "@/types/availability";
 import {
@@ -115,6 +115,7 @@ export function SlotPicker({
   const [authError, setAuthError] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isQuoteSuccess, setIsQuoteSuccess] = useState(false);
 
   // Estado de Pré-Reserva
   const [preReservationPeriod, setPreReservationPeriod] = useState<PreferredPeriod>("qualquer");
@@ -309,10 +310,18 @@ export function SlotPicker({
         startTime: selectedSlot.time,
         endTime: selectedSlot.endTime,
         totalDurationMin: service.steps.reduce((sum, s) => sum + s.durationMin, 0),
-        status: "confirmed",
+        status: "pending_confirmation",
         price: service.promotionalPrice || service.price,
         paymentStatus: "pending",
         stepBlocks: selectedSlot.stepBlocks,
+        procedures: service.procedures || [
+          {
+            title: service.title,
+            durationMin: service.steps.reduce((sum, s) => sum + s.durationMin, 0),
+            price: service.promotionalPrice || service.price,
+            isIncluded: true,
+          },
+        ],
         notes: selectedSlot.isEncaixe
           ? `Agendamento via Encaixe Otimizado (${selectedSlot.encaixeDetails})`
           : "Agendamento direto pelo catálogo da cliente",
@@ -337,6 +346,96 @@ export function SlotPicker({
     } catch (err: any) {
       console.error("Erro ao processar agendamento:", err);
       setAuthError(err.message || "Erro ao salvar agendamento. Tente novamente.");
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // Solicitação de Orçamento sem Bloquear Horário na Grade
+  const handleRequestUncommittedQuote = async () => {
+    setAuthError("");
+
+    let clientToUse: SalonClient | null = activeClient;
+    setIsAuthenticating(true);
+
+    try {
+      if (!clientToUse) {
+        if (!clientPhone.trim()) {
+          setAuthError("Informe seu número de WhatsApp para receber o orçamento.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        if (!clientName.trim()) {
+          setAuthError("Por favor, informe seu nome completo para o orçamento.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        const newClient: SalonClient = {
+          id: `cli-${Date.now()}`,
+          name: clientName.trim(),
+          phone: clientPhone.trim(),
+          password: clientPassword?.trim() || "123456",
+          createdAt: new Date().toISOString(),
+          lastVisitAt: `${selectedDate || new Date().toISOString().split("T")[0]}T09:00:00Z`,
+          lastServiceTitle: service.title,
+        };
+
+        const savedClient = await SupabaseDataService.saveClient(newClient);
+        SalonStore.setActiveClient(savedClient);
+        clientToUse = savedClient;
+        setActiveClient(savedClient);
+      }
+
+      const finalDate = selectedDate || new Date().toISOString().split("T")[0];
+      const finalTime = selectedSlot?.time || "09:00";
+      const finalEndTime = selectedSlot?.endTime || "10:30";
+
+      const newAppointment: Appointment = {
+        id: `apt-${Date.now()}`,
+        orgId: service.orgId || "org-gleicy-ronha",
+        professionalId: service.professionalId || "user-gleicy-ronha",
+        professionalName: "Gleicy Ronha",
+        serviceId: service.id,
+        serviceTitle: service.title,
+        clientName: clientToUse.name,
+        clientPhone: clientToUse.phone,
+        clientEmail: clientToUse.email,
+        date: finalDate,
+        startTime: finalTime,
+        endTime: finalEndTime,
+        totalDurationMin: service.steps.reduce((sum, s) => sum + s.durationMin, 0),
+        status: "uncommitted_quote",
+        isUncommittedQuote: true,
+        price: service.promotionalPrice || service.price,
+        paymentStatus: "pending",
+        stepBlocks: [],
+        procedures: service.procedures || [
+          {
+            title: service.title,
+            durationMin: service.steps.reduce((sum, s) => sum + s.durationMin, 0),
+            price: service.promotionalPrice || service.price,
+            isIncluded: true,
+          },
+        ],
+        notes: "Orçamento sem compromisso (sem bloqueio de horário na grade)",
+        createdAt: new Date().toISOString(),
+      };
+
+      await SupabaseDataService.saveAppointment(newAppointment);
+
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        colors: ["#DBAE3B", "#C59B27", "#FAF7F2", "#8B6914"],
+        origin: { y: 0.6 },
+      });
+
+      setIsQuoteSuccess(true);
+    } catch (err: any) {
+      console.error("Erro ao solicitar orçamento:", err);
+      setAuthError(err.message || "Erro ao solicitar orçamento. Tente novamente.");
     } finally {
       setIsAuthenticating(false);
     }
@@ -448,7 +547,7 @@ export function SlotPicker({
           {preReservationNotes && (
             <div className="pt-2 border-t border-[#E7DCCE]/60 text-[11px] text-stone-600">
               <span className="font-semibold text-stone-700 block">Sua Observação:</span>
-              <span>"{preReservationNotes}"</span>
+              <span>&quot;{preReservationNotes}&quot;</span>
             </div>
           )}
         </div>
@@ -456,6 +555,56 @@ export function SlotPicker({
         <p className="text-[11px] text-stone-500 mb-6">
           Assim que a Gleicy avaliar a possibilidade de abertura ou encaixe, você receberá uma mensagem direta pelo WhatsApp!
         </p>
+
+        <button
+          onClick={onCancel}
+          className="w-full py-3 px-6 rounded-xl text-white gold-gradient font-bold text-xs shadow-md hover:opacity-95 transition-all"
+        >
+          Voltar ao Catálogo
+        </button>
+      </div>
+    );
+  }
+
+  if (isQuoteSuccess) {
+    return (
+      <div className="max-w-md mx-auto my-10 p-8 bg-white rounded-3xl shadow-xl border border-[#E7DCCE] text-center animate-fade-in">
+        <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-100 to-amber-200 text-[#C59B27] flex items-center justify-center mb-4 border border-amber-300">
+          <Sparkles className="w-8 h-8" />
+        </div>
+        <span className="text-xs font-semibold uppercase tracking-widest text-[#AD841D]">
+          Orçamento sem Compromisso
+        </span>
+        <h2 className="font-editorial text-2xl font-bold text-[#2D1914] mt-1 mb-2">
+          Orçamento Solicitado, {activeClient?.name || clientName}!
+        </h2>
+        <p className="text-xs text-[#5E372C] mb-6">
+          Sua solicitação de orçamento para <strong>{service.title}</strong> foi registrada com sucesso.
+          Nenhum horário foi bloqueado na agenda e você receberá o atendimento no seu WhatsApp.
+        </p>
+
+        <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] text-left text-xs space-y-2 mb-6">
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500">Status:</span>
+            <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px]">
+              Orçamento sem Reserva de Horário
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500">Serviço:</span>
+            <span className="font-bold text-[#2D1914]">{service.title}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500">WhatsApp:</span>
+            <span className="font-semibold text-[#2D1914]">{activeClient?.phone || clientPhone}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500">Valor Estimado:</span>
+            <span className="font-bold text-[#C59B27]">
+              {formatBRL(service.promotionalPrice || service.price)}
+            </span>
+          </div>
+        </div>
 
         <button
           onClick={onCancel}
@@ -538,6 +687,24 @@ export function SlotPicker({
             <p className="text-xs text-[#5E372C] mt-1 max-w-lg">
               {service.description || "Procedimento exclusivo com técnica avançada para cabelos saudáveis."}
             </p>
+
+            {/* Breakdown de múltiplos procedimentos */}
+            {service.procedures && service.procedures.length > 1 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mr-1">
+                  Procedimentos inclusos ({service.procedures.length}):
+                </span>
+                {service.procedures.map((p: AppointmentProcedureItem, idx: number) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-0.5 rounded-full bg-[#FAF7F2] border border-[#E7DCCE] text-[11px] font-semibold text-[#2D1914] flex items-center gap-1"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C59B27]" />
+                    {p.title} ({p.durationMin}m • {formatBRL(p.price)})
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="text-right shrink-0">
             <span className="text-[11px] text-stone-500 block">Investimento:</span>
@@ -1192,29 +1359,41 @@ export function SlotPicker({
               </div>
 
               {/* Ações Finais */}
-              <div className="flex items-center justify-between pt-4 border-t border-[#E7DCCE]/60">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-[#E7DCCE]/60">
                 <button
                   type="button"
                   onClick={onCancel}
-                  className="px-4 py-2.5 text-xs font-semibold text-[#5E372C] hover:bg-[#F3ECE1] rounded-xl transition-colors"
+                  className="px-4 py-2.5 text-xs font-semibold text-[#5E372C] hover:bg-[#F3ECE1] rounded-xl transition-colors order-3 sm:order-1 text-center"
                 >
                   Cancelar
                 </button>
 
-                <button
-                  type="submit"
-                  disabled={!selectedSlot || isAuthenticating}
-                  className="px-7 py-3 rounded-xl text-xs font-bold text-white gold-gradient shadow-md hover:opacity-95 flex items-center space-x-2 transition-all disabled:opacity-50"
-                >
-                  {isAuthenticating ? (
-                    <span>Processando...</span>
-                  ) : (
-                    <>
-                      <span>Confirmar Agendamento</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 order-1 sm:order-2">
+                  <button
+                    type="button"
+                    onClick={handleRequestUncommittedQuote}
+                    disabled={isAuthenticating}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5E372C] bg-[#FAF7F2] border border-[#E7DCCE] hover:bg-[#F3ECE1] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
+                    <span>Solicitar Orçamento sem Bloquear Horário</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!selectedSlot || isAuthenticating}
+                    className="px-7 py-3 rounded-xl text-xs font-bold text-white gold-gradient shadow-md hover:opacity-95 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+                  >
+                    {isAuthenticating ? (
+                      <span>Processando...</span>
+                    ) : (
+                      <>
+                        <span>Confirmar Agendamento</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </>
           )}

@@ -23,6 +23,7 @@ import { ClientFooter } from "@/components/client/ClientFooter";
 import { GamifiedTriage } from "@/components/client/GamifiedTriage";
 import { SlotPicker } from "@/components/client/SlotPicker";
 import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
+import { MultiServiceSelectorModal } from "@/components/client/MultiServiceSelectorModal";
 
 import { SalonOrganization } from "@/types/salon";
 import { ServiceItem } from "@/types/service";
@@ -46,6 +47,8 @@ import {
   FileText,
   Search,
 } from "lucide-react";
+import { buildCompositeService } from "@/lib/services/composite";
+export { buildCompositeService };
 
 export default function ClientHomePage() {
   const [organization, setOrganization] = useState<SalonOrganization | null>(null);
@@ -69,6 +72,7 @@ export default function ClientHomePage() {
 
   // Estados do Fluxo de Agendamento da Cliente
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
+  const [isMultiServiceModalOpen, setIsMultiServiceModalOpen] = useState(false);
   const [isTakingTriage, setIsTakingTriage] = useState(false);
   const [isPickingSlot, setIsPickingSlot] = useState(false);
   const [completedSubmission, setCompletedSubmission] = useState<TriageSubmission | null>(null);
@@ -197,6 +201,22 @@ export default function ClientHomePage() {
     showToast("Sessão encerrada com sucesso.", "success");
   };
 
+  // Handler para confirmação de múltiplos procedimentos ("Montar o meu atendimento")
+  const handleConfirmMultiServices = (selectedServices: ServiceItem[]) => {
+    if (!selectedServices || selectedServices.length === 0) return;
+
+    if (selectedServices.length === 1) {
+      handleSelectService(selectedServices[0]);
+      setIsMultiServiceModalOpen(false);
+      return;
+    }
+
+    const compositeService = buildCompositeService(selectedServices);
+    if (!compositeService) return;
+    setIsMultiServiceModalOpen(false);
+    handleSelectService(compositeService);
+  };
+
   // Iniciar fluxo a partir de um serviço escolhido
   const handleSelectService = (srv: ServiceItem) => {
     setSelectedService(srv);
@@ -259,7 +279,9 @@ export default function ClientHomePage() {
     const saved = await SupabaseDataService.saveAppointment(apt);
     setAppointments((prev) => [...prev, saved]);
     setIsPickingSlot(false);
-    setConfirmedAppointment(saved);
+    if (!apt.isUncommittedQuote && apt.status !== "uncommitted_quote") {
+      setConfirmedAppointment(saved);
+    }
   };
 
   const handlePreReservationDone = (pre: PreReservation) => {
@@ -392,7 +414,16 @@ export default function ClientHomePage() {
       <TransparentServicesCatalog
         services={services}
         onSelectService={handleSelectService}
+        onOpenMultiServiceSelector={() => setIsMultiServiceModalOpen(true)}
         whatsappNumber={whatsappNumber}
+      />
+
+      {/* Modal de Montagem de Atendimento Personalizado */}
+      <MultiServiceSelectorModal
+        services={services}
+        isOpen={isMultiServiceModalOpen}
+        onClose={() => setIsMultiServiceModalOpen(false)}
+        onConfirm={handleConfirmMultiServices}
       />
 
       {/* 7. Depoimentos de Clientes */}

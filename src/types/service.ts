@@ -1,4 +1,7 @@
+import type { AppointmentProcedureItem } from "./appointment";
+
 export type StepType = "active" | "pause";
+export type ServicePriceType = "fixed" | "starting_at";
 
 export interface ServiceStep {
   id: string;
@@ -28,10 +31,13 @@ export interface ServiceItem {
   description: string;
   price: number;
   promotionalPrice?: number;
+  priceType?: ServicePriceType; // 'fixed' | 'starting_at' (default: 'fixed')
+  maxPrice?: number; // Limite superior opcional para faixas de preço
   imageUrl?: string;
   requiresTriage: boolean;
   triageFormId?: string; // Questionário vinculado
   steps: ServiceStep[];
+  procedures?: AppointmentProcedureItem[];
   productCosts?: ServiceProductCost[]; // Para cálculo no dashboard avançado
   isActive: boolean;
 }

@@ -12,17 +12,20 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Layers,
 } from "lucide-react";
 
 interface TransparentServicesCatalogProps {
   services: ServiceItem[];
   onSelectService: (service: ServiceItem) => void;
+  onOpenMultiServiceSelector?: () => void;
   whatsappNumber?: string;
 }
 
 export function TransparentServicesCatalog({
   services,
   onSelectService,
+  onOpenMultiServiceSelector,
   whatsappNumber = "5511999999999",
 }: TransparentServicesCatalogProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -161,8 +164,54 @@ export function TransparentServicesCatalog({
                 {cat.label}
               </button>
             ))}
+
+            {onOpenMultiServiceSelector && (
+              <button
+                type="button"
+                onClick={onOpenMultiServiceSelector}
+                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 transition-all duration-300 bg-gradient-to-r from-[#C7A03A] to-[#DBAE3B] text-[#122B2A] shadow-md hover:brightness-110 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Layers className="w-3.5 h-3.5 text-[#122B2A]" />
+                <span>Montar o meu atendimento</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Banner de Destaque: Montar o meu atendimento */}
+        {onOpenMultiServiceSelector && (
+          <div className="mb-10 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#1D3D3C] via-[#244b4a] to-[#122B2A] text-[#FCF5EB] border border-[#C7A03A]/40 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-[#C7A03A] transition-all">
+            <div
+              className="absolute -right-10 -bottom-10 w-60 h-60 opacity-20 pointer-events-none"
+              style={{
+                background: "radial-gradient(circle, #C7A03A, transparent 70%)",
+                filter: "blur(40px)",
+              }}
+            />
+            <div className="space-y-2 text-center md:text-left relative z-10 max-w-xl">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#C7A03A]/20 border border-[#C7A03A]/40 text-[#E5C158] text-[10px] font-bold uppercase tracking-wider">
+                <Sparkles className="w-3 h-3 text-[#C7A03A]" />
+                <span>Experiência Personalizada & Sob Medida</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-bold font-editorial text-white">
+                Montar o meu atendimento
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
+                Deseja realizar mais de um procedimento no mesmo dia? Combine corte, mechas, tratamentos e finalizações para calcularmos automaticamente o tempo total e os valores sem sobreposição de horários.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenMultiServiceSelector}
+              className="relative overflow-hidden w-full md:w-auto px-7 py-4 rounded-2xl bg-gradient-to-r from-[#C7A03A] to-[#DBAE3B] text-[#122B2A] text-xs font-bold uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-lg shrink-0 flex items-center justify-center space-x-2.5 z-10 cursor-pointer group/btn"
+            >
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
+              <Layers className="w-4 h-4 text-[#122B2A]" />
+              <span>Montar Atendimento com Múltiplos Itens</span>
+            </button>
+          </div>
+        )}
 
         {/* Grid de Serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -215,16 +264,38 @@ export function TransparentServicesCatalog({
                       <span className="text-[10px] uppercase font-semibold text-stone-200 block">
                         Investimento
                       </span>
-                      <div className="flex items-baseline space-x-2">
-                        <span className="text-2xl font-bold font-editorial text-white">
-                          {formatBRL(service.price)}
-                        </span>
-                        {service.promotionalPrice && (
-                          <span className="text-xs text-stone-300 line-through">
+                      {service.priceType === "starting_at" ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-[#C7A03A] font-bold uppercase tracking-wider">
+                            A partir de
+                          </span>
+                          <div className="flex items-baseline space-x-1">
+                            <span className="text-2xl font-bold font-editorial text-white">
+                              {formatBRL(service.price)}
+                            </span>
+                            {service.maxPrice && service.maxPrice > service.price && (
+                              <span className="text-xs text-stone-300 font-medium">
+                                até {formatBRL(service.maxPrice)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : service.promotionalPrice && service.promotionalPrice < service.price ? (
+                        <div className="flex items-baseline space-x-2">
+                          <span className="text-2xl font-bold font-editorial text-white">
                             {formatBRL(service.promotionalPrice)}
                           </span>
-                        )}
-                      </div>
+                          <span className="text-xs text-stone-300 line-through">
+                            {formatBRL(service.price)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-baseline space-x-2">
+                          <span className="text-2xl font-bold font-editorial text-white">
+                            {formatBRL(service.price)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {service.requiresTriage && (
@@ -293,7 +364,7 @@ export function TransparentServicesCatalog({
                     </button>
 
                     <a
-                      href={`https://wa.me/${whatsappNumber}?text=Olá%20Gleicy!%20Tenho%20dúvidas%20sobre%20*${encodeURIComponent(service.title)}*%20(${formatBRL(service.price)}).`}
+                      href={`https://wa.me/${whatsappNumber}?text=Olá%20Gleicy!%20Tenho%20dúvidas%20sobre%20*${encodeURIComponent(service.title)}*%20(${service.priceType === "starting_at" ? "a partir de " : ""}${service.promotionalPrice && service.promotionalPrice < service.price ? formatBRL(service.promotionalPrice) : formatBRL(service.price)}).`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-2.5 px-3 rounded-xl bg-white border border-[#D8D0BD] text-[#736455] hover:text-[#1D3D3C] hover:bg-[#F0EFE3] text-xs font-semibold transition-all flex items-center justify-center space-x-2"

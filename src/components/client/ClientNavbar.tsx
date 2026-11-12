@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Sparkles, Phone, Calendar, Menu, X, User } from "lucide-react";
 import { SalonOrganization } from "@/types/salon";
 import { SalonClient } from "@/types/client";
@@ -110,6 +111,13 @@ export function ClientNavbar({
                 {link.label}
               </button>
             ))}
+            <Link
+              href="/meus-agendamentos"
+              className="nav-link-animated font-sans hover:text-[#1D3D3C] transition-colors duration-200 py-1 flex items-center gap-1.5"
+            >
+              <User className="w-3.5 h-3.5 text-[#C7A03A]" />
+              <span>Meus Agendamentos</span>
+            </Link>
           </nav>
 
           {/* CTAs Desktop */}
@@ -174,6 +182,14 @@ export function ClientNavbar({
                 {link.label}
               </button>
             ))}
+            <Link
+              href="/meus-agendamentos"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full text-left px-4 py-3 rounded-xl text-sm font-sans font-medium text-[#736455] hover:text-[#1D3D3C] hover:bg-[#F0EFE3] transition-all flex items-center gap-2"
+            >
+              <User className="w-4 h-4 text-[#C7A03A]" />
+              <span>Meus Agendamentos</span>
+            </Link>
             <div className="pt-3 border-t border-[#D8D0BD]/60 space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <a

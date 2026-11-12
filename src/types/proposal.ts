@@ -122,4 +122,6 @@ export interface LuxuryProposal {
   expiresAt: string;
   createdAt: string;
   approvedAt?: string;
+  firstViewedAt?: string;
+  first_viewed_at?: string;
 }

@@ -42,7 +42,9 @@ export function buildDayTimeline(
       a.date === date &&
       (professionalId === "all" || a.professionalId === professionalId) &&
       a.status !== "cancelled" &&
-      a.status !== "pending_proposal"
+      a.status !== "pending_proposal" &&
+      !a.isUncommittedQuote &&
+      a.status !== "uncommitted_quote"
   );
 
   const blocks: DayTimelineBlock[] = [];
@@ -432,6 +434,8 @@ export function validateProposalScheduleFeasibility({
       a.date === date &&
       a.status !== "cancelled" &&
       a.status !== "pending_proposal" &&
+      !a.isUncommittedQuote &&
+      a.status !== "uncommitted_quote" &&
       (!ignoreAppointmentId || a.id !== ignoreAppointmentId) &&
       (!ignoreTriageSubmissionId || a.triageSubmissionId !== ignoreTriageSubmissionId)
   );

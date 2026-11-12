@@ -199,20 +199,40 @@ export function ServiceManager({
                         <h3 className="text-lg sm:text-xl font-bold text-[#1D3D3C]">
                           {service.title}
                         </h3>
-                        {service.promotionalPrice && service.promotionalPrice < service.price ? (
-                          <>
-                            <span className="text-xs font-bold text-[#80611F] bg-[#FCF9F0] px-2.5 py-0.5 rounded-md border border-[#C7A03A]/50">
+
+                        {service.priceType === "starting_at" ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-[#80611F] bg-[#FCF9F0] px-2.5 py-0.5 rounded-md border border-[#C7A03A]/50 flex items-center gap-1 shadow-2xs">
+                              <Sparkles className="w-3 h-3 text-[#AD841D]" />
+                              <span>A partir de {formatBRL(service.price)}</span>
+                              {service.maxPrice && service.maxPrice > service.price && (
+                                <span className="text-[#736455] font-medium text-[11px] ml-0.5">
+                                  (até {formatBRL(service.maxPrice)})
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#AD841D] bg-amber-50/80 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                              Preço Variável
+                            </span>
+                          </div>
+                        ) : service.promotionalPrice && service.promotionalPrice < service.price ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-[#80611F] bg-[#FCF9F0] px-2.5 py-0.5 rounded-md border border-[#C7A03A]/50 shadow-2xs">
                               {formatBRL(service.promotionalPrice)}
                             </span>
                             <span className="text-xs text-[#736455] line-through">
                               {formatBRL(service.price)}
                             </span>
-                          </>
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                              Promoção
+                            </span>
+                          </div>
                         ) : (
-                          <span className="text-xs font-bold text-[#80611F] bg-[#FCF9F0] px-2.5 py-0.5 rounded-md border border-[#C7A03A]/50">
+                          <span className="text-xs font-bold text-[#80611F] bg-[#FCF9F0] px-2.5 py-0.5 rounded-md border border-[#C7A03A]/50 shadow-2xs">
                             {formatBRL(service.price)}
                           </span>
                         )}
+
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-[#736455] bg-white border border-[#D8D0BD] px-2 py-0.5 rounded-full">
                           {service.category}
                         </span>

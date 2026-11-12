@@ -38,6 +38,7 @@ interface SidebarProps {
   onSelectTab: (tab: AdminTab) => void;
   pendingTriageCount: number;
   pendingPreReservationsCount?: number;
+  pendingConfirmationsCount?: number;
   role?: string | null;
 }
 
@@ -46,6 +47,7 @@ export function Sidebar({
   onSelectTab,
   pendingTriageCount,
   pendingPreReservationsCount = 0,
+  pendingConfirmationsCount = 0,
   role,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -63,6 +65,8 @@ export function Sidebar({
       id: "agenda" as AdminTab,
       label: "Agenda & Calendário",
       icon: Calendar,
+      badge: pendingConfirmationsCount > 0 ? `${pendingConfirmationsCount}` : undefined,
+      badgeColor: "bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/60 font-bold animate-pulse",
     },
     {
       id: "abertura-agenda" as AdminTab,

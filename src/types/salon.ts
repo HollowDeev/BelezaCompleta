@@ -23,6 +23,7 @@ export interface SalonOrganization {
     pixDiscountPercent: number; // ex: 5%
     maxParallelInPause: number; // ex: 1
     dailyTargetRevenue?: number; // Meta diária de faturamento (ex: R$ 1500)
+    defaultConfirmationMessage?: string;
   };
   createdAt: string;
 }

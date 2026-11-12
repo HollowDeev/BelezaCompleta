@@ -70,4 +70,5 @@ export interface TriageSubmission {
   submittedAt: string;
   reviewedAt?: string;
   proposalId?: string;
+  preReservationId?: string;
 }

@@ -82,7 +82,12 @@ export function LinearTimelineMaster({
 
   // Agendamentos filtrados para o dia selecionado (apenas agendamentos reais/confirmados)
   const dayAppointments = appointments.filter(
-    (a) => a.date === selectedDate && a.status !== "cancelled" && a.status !== "pending_proposal"
+    (a) =>
+      a.date === selectedDate &&
+      a.status !== "cancelled" &&
+      a.status !== "pending_proposal" &&
+      a.status !== "uncommitted_quote" &&
+      !a.isUncommittedQuote
   );
 
   // Filtra agendamentos elegíveis: ativos agora OU que iniciam em até 5 minutos

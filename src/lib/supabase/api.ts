@@ -1,9 +1,9 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { SalonOrganization, UserProfile, DashboardMode } from "@/types/salon";
-import { ServiceItem, ServiceStep } from "@/types/service";
+import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
-import { Appointment } from "@/types/appointment";
+import { Appointment, AppointmentProcedureItem } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import { SalonStore } from "@/lib/storage/localStore";
 import {
@@ -25,6 +25,7 @@ export const DEFAULT_ORG_ID = "11111111-1111-4111-8111-111111111111";
 export const DEFAULT_GLEICY_ID = "58f26242-1e53-432e-b924-dea25ee2068a";
 export const DEFAULT_DEBORA_ID = "c88c989f-6f6d-421e-95ca-4992eaeb7ea3";
 export const DEFAULT_TRIAGE_FORM_ID = "33333333-3333-4333-8333-333333333331";
+export const DEFAULT_SERVICE_ID = "22222222-2222-4222-8222-222222222221";
 
 export function resolveValidUuid(
   id?: string | null,
@@ -35,6 +36,7 @@ export function resolveValidUuid(
   if (id === "user-gleicy-ronha") return DEFAULT_GLEICY_ID;
   if (id === "user-debora-stylist") return DEFAULT_DEBORA_ID;
   if (id === "form-triage-iluminado") return DEFAULT_TRIAGE_FORM_ID;
+  if (id === "srv-custom") return DEFAULT_SERVICE_ID;
   if (fallback && isUuid(fallback)) return fallback;
   return null;
 }
@@ -127,7 +129,7 @@ export class SupabaseDataService {
         return SalonStore.getProfiles();
       }
 
-      return data.map((p) => ({
+      return data.map((p: any) => ({
         id: p.id,
         orgId: p.org_id,
         name: p.name,
@@ -225,7 +227,7 @@ export class SupabaseDataService {
 
       if (!data) return [];
 
-      return data.map((s) => ({
+      return data.map((s: any) => ({
         id: s.id,
         orgId: s.org_id,
         professionalId: s.professional_id,
@@ -235,6 +237,8 @@ export class SupabaseDataService {
         description: s.description || "",
         price: Number(s.price),
         promotionalPrice: s.promotional_price ? Number(s.promotional_price) : undefined,
+        priceType: (s.price_type as "fixed" | "starting_at") || "fixed",
+        maxPrice: s.max_price != null ? Number(s.max_price) : undefined,
         imageUrl: s.image_url,
         requiresTriage: s.requires_triage,
         triageFormId: s.triage_form_id,
@@ -291,7 +295,7 @@ export class SupabaseDataService {
       }
 
       // 3. Formulário de Triagem (UUID ou null)
-      let triageFormId = service.requiresTriage
+      const triageFormId = service.requiresTriage
         ? resolveValidUuid(service.triageFormId, DEFAULT_TRIAGE_FORM_ID)
         : null;
 
@@ -314,6 +318,11 @@ export class SupabaseDataService {
         description: service.description || "",
         price: Number(service.price) || 0,
         promotional_price: service.promotionalPrice ? Number(service.promotionalPrice) : null,
+        price_type: service.priceType || "fixed",
+        max_price:
+          service.priceType === "starting_at" && service.maxPrice != null
+            ? Number(service.maxPrice)
+            : null,
         image_url: service.imageUrl || null,
         requires_triage: Boolean(service.requiresTriage),
         triage_form_id: triageFormId,
@@ -363,6 +372,8 @@ export class SupabaseDataService {
         orgId,
         professionalId: professionalId || service.professionalId,
         triageFormId: triageFormId || undefined,
+        priceType: (data.price_type as "fixed" | "starting_at") || service.priceType || "fixed",
+        maxPrice: data.max_price != null ? Number(data.max_price) : service.maxPrice,
       };
       SalonStore.saveService(updatedService);
 
@@ -405,7 +416,7 @@ export class SupabaseDataService {
         return SalonStore.getTriageForms();
       }
 
-      return data.map((f) => ({
+      return data.map((f: any) => ({
         id: f.id,
         orgId: f.org_id,
         title: f.title,
@@ -547,7 +558,7 @@ export class SupabaseDataService {
 
       if (!data) return [];
 
-      return data.map((s) => ({
+      return data.map((s: any) => ({
         id: s.id,
         orgId: s.org_id,
         formId: s.form_id,
@@ -641,6 +652,26 @@ export class SupabaseDataService {
     }
   }
 
+  static async approveTriageDirectly(
+    submissionId: string
+  ): Promise<{ submission: TriageSubmission; appointment?: Appointment } | null> {
+    const result = SalonStore.approveTriageDirectly(submissionId);
+    if (!isSupabaseConfigured || !supabase) {
+      broadcastSync("triage_approved", submissionId);
+      return result;
+    }
+    try {
+      await supabase
+        .from("triage_submissions")
+        .update({ status: "approved" })
+        .eq("id", submissionId);
+      broadcastSync("triage_approved", submissionId);
+    } catch (e) {
+      console.warn("Error approving triage directly in Supabase", e);
+    }
+    return result;
+  }
+
   // Helper para mapear propostas do Supabase e desempacotar metadados de agendamento
   private static mapProposal(p: any): LuxuryProposal {
     let schedulingDetails = p.scheduling_details;
@@ -689,6 +720,8 @@ export class SupabaseDataService {
       expiresAt: p.expires_at,
       createdAt: p.created_at,
       approvedAt: p.approved_at,
+      first_viewed_at: p.first_viewed_at || p.firstViewedAt,
+      firstViewedAt: p.first_viewed_at || p.firstViewedAt,
     };
   }
 
@@ -709,7 +742,7 @@ export class SupabaseDataService {
       }
 
       if (!data) return [];
-      return data.map((p) => this.mapProposal(p));
+      return data.map((p: any) => this.mapProposal(p));
     } catch (err) {
       console.error("Error fetching proposals from Supabase", err);
       return SalonStore.getProposals();
@@ -737,7 +770,10 @@ export class SupabaseDataService {
   }
 
   static async getProposalsByClientPhone(phone: string): Promise<LuxuryProposal[]> {
-    const cleanPhone = phone.replace(/\D/g, "");
+    let cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.startsWith("55") && cleanPhone.length > 11) {
+      cleanPhone = cleanPhone.slice(2);
+    }
     if (!cleanPhone) return [];
 
     if (isSupabaseConfigured && supabase) {
@@ -749,8 +785,8 @@ export class SupabaseDataService {
 
         if (!error && data && data.length > 0) {
           return data
-            .filter((p) => (p.client_phone || "").replace(/\D/g, "").includes(cleanPhone))
-            .map((p) => this.mapProposal(p));
+            .filter((p: any) => (p.client_phone || "").replace(/\D/g, "").includes(cleanPhone))
+            .map((p: any) => this.mapProposal(p));
         }
       } catch (e) {
         console.warn("Direct getProposalsByClientPhone query failed, falling back to cached list", e);
@@ -815,6 +851,7 @@ export class SupabaseDataService {
         pix_total: Number(prop.pixTotal) || 0,
         status: prop.status,
         expires_at: prop.expiresAt || null,
+        first_viewed_at: prop.firstViewedAt || (prop as any).first_viewed_at || null,
         approved_at: prop.approvedAt || null,
       };
 
@@ -848,21 +885,60 @@ export class SupabaseDataService {
     options?: { chosenDate?: string; chosenTime?: string }
   ): Promise<void> {
     SalonStore.approveProposal(proposalId, options);
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase) {
+      broadcastSync("proposal_approved", proposalId);
+      return;
+    }
 
     try {
       const now = new Date().toISOString();
       const prop = await this.getProposalById(proposalId);
+      if (!prop) {
+        throw new Error(`Proposta não encontrada: ${proposalId}`);
+      }
 
       const finalDate =
         options?.chosenDate ||
-        prop?.schedulingDetails?.confirmedDate ||
-        prop?.schedulingDetails?.suggestedDateStart;
+        prop.schedulingDetails?.confirmedDate ||
+        prop.schedulingDetails?.clientChosenDate ||
+        prop.schedulingDetails?.suggestedDateStart ||
+        prop.schedulingDetails?.originalDate;
       const finalTime =
         options?.chosenTime ||
-        prop?.schedulingDetails?.confirmedTime ||
-        prop?.schedulingDetails?.suggestedTime ||
+        prop.schedulingDetails?.confirmedTime ||
+        prop.schedulingDetails?.clientChosenTime ||
+        prop.schedulingDetails?.suggestedTime ||
+        prop.schedulingDetails?.originalTime ||
         "09:00";
+
+      let validServiceId: string | null = null;
+      if (prop.triageSubmissionId) {
+        try {
+          const subs = await this.getTriageSubmissions();
+          const matchedSub = subs.find((s) => s.id === prop.triageSubmissionId);
+          validServiceId = resolveValidUuid(matchedSub?.serviceId);
+        } catch {}
+      }
+      if (!validServiceId) {
+        try {
+          const services = await this.getServices();
+          validServiceId =
+            services[0]?.id && isUuid(services[0].id)
+              ? services[0].id
+              : DEFAULT_SERVICE_ID;
+        } catch {
+          validServiceId = DEFAULT_SERVICE_ID;
+        }
+      }
+
+      const procedures: AppointmentProcedureItem[] = (prop.items || []).map((item) => ({
+        id: item.id,
+        serviceId: validServiceId || DEFAULT_SERVICE_ID,
+        title: item.serviceTitle,
+        durationMin: item.durationMin || 60,
+        price: item.specialPrice ?? item.originalPrice ?? 0,
+        isIncluded: Boolean(item.isIncluded ?? true),
+      }));
 
       // Se a cliente escolheu nova data/hora, empacota e atualiza a proposta
       if (options?.chosenDate && prop) {
@@ -896,9 +972,11 @@ export class SupabaseDataService {
         status: "confirmed",
         payment_status: "paid",
         proposal_id: proposalId,
+        is_uncommitted_quote: false,
       };
       if (finalDate) aptUpdate.date = finalDate;
       if (finalTime) aptUpdate.start_time = finalTime;
+      if (procedures.length > 0) aptUpdate.procedures = procedures;
 
       const { data: updatedApts } = await supabase
         .from("appointments")
@@ -908,7 +986,7 @@ export class SupabaseDataService {
 
       // 2. Se não atualizou por proposal_id, tenta por triage_submission_id
       let hadExistingApt = Boolean(updatedApts && updatedApts.length > 0);
-      if (!hadExistingApt && prop?.triageSubmissionId) {
+      if (!hadExistingApt && prop.triageSubmissionId) {
         const { data: updatedByTriage } = await supabase
           .from("appointments")
           .update(aptUpdate)
@@ -920,9 +998,9 @@ export class SupabaseDataService {
       }
 
       // 3. Se ainda assim não existe agendamento nenhum, cria agendamento confirmado no banco
-      if (!hadExistingApt && prop && finalDate && finalTime) {
+      if (!hadExistingApt && finalDate && finalTime) {
         const serviceTitle =
-          prop.items?.[0]?.serviceTitle || prop.subtitle || "Procedimento Personalizado";
+          prop.items?.[0]?.serviceTitle || prop.subtitle || prop.title || "Procedimento Personalizado";
 
         const totalDurationMin = prop.schedulingDetails?.totalDurationMin || 180;
         const [startH, startM] = (finalTime || "09:00").split(":").map(Number);
@@ -960,8 +1038,9 @@ export class SupabaseDataService {
           orgId: prop.orgId || DEFAULT_ORG_ID,
           professionalId: prop.professionalId || DEFAULT_GLEICY_ID,
           professionalName: "Gleicy Ronha",
-          serviceId: "srv-custom",
+          serviceId: validServiceId || DEFAULT_SERVICE_ID,
           serviceTitle: serviceTitle,
+          procedures,
           clientName: prop.clientName,
           clientPhone: prop.clientPhone,
           clientEmail: prop.clientEmail,
@@ -970,6 +1049,7 @@ export class SupabaseDataService {
           endTime: computedEndTime,
           totalDurationMin: totalDurationMin,
           status: "confirmed",
+          isUncommittedQuote: false,
           stepBlocks,
           price: prop.totalWithDiscount || prop.pixTotal,
           paymentStatus: "paid",
@@ -980,7 +1060,7 @@ export class SupabaseDataService {
       }
 
       // 4. Atualiza triagem se houver
-      if (prop?.triageSubmissionId) {
+      if (prop.triageSubmissionId) {
         await supabase
           .from("triage_submissions")
           .update({ status: "approved", proposal_id: proposalId })
@@ -994,7 +1074,7 @@ export class SupabaseDataService {
       }
 
       // 5. Atualiza pré-reserva associada por telefone e data
-      if (prop?.clientPhone && finalDate) {
+      if (prop.clientPhone && finalDate) {
         await supabase
           .from("pre_reservations")
           .update({ status: "converted", updated_at: now })
@@ -1005,7 +1085,31 @@ export class SupabaseDataService {
       broadcastSync("proposal_approved", proposalId);
     } catch (err) {
       console.error("Error approving proposal in Supabase", err);
+      throw err;
     }
+  }
+
+  static async recordProposalFirstView(proposalId: string): Promise<LuxuryProposal | null> {
+    const localUpdated = SalonStore.recordProposalFirstView(proposalId);
+    if (!isSupabaseConfigured || !supabase) {
+      return localUpdated;
+    }
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("proposals")
+        .update({ first_viewed_at: now })
+        .eq("id", proposalId)
+        .is("first_viewed_at", null)
+        .select()
+        .single();
+      if (!error && data) {
+        return this.mapProposal(data);
+      }
+    } catch (e) {
+      console.warn("Error updating first_viewed_at in Supabase", e);
+    }
+    return localUpdated;
   }
 
   // 7. Modelos de Propostas
@@ -1023,7 +1127,7 @@ export class SupabaseDataService {
         return SalonStore.getProposalTemplates();
       }
 
-      return data.map((t) => ({
+      return data.map((t: any) => ({
         id: t.id,
         title: t.title,
         targetCategory: t.category,
@@ -1064,13 +1168,13 @@ export class SupabaseDataService {
 
       if (!data) return [];
 
-      return data.map((a) => ({
+      return data.map((a: any) => ({
         id: a.id,
         orgId: a.org_id,
         professionalId: a.professional_id,
         professionalName: a.profiles?.name || "Gleicy Ronha",
-        serviceId: a.service_id,
-        serviceTitle: a.services?.title || "Transformação Capilar",
+        serviceId: a.service_id || undefined,
+        serviceTitle: a.service_title || a.services?.title || "Atendimento Personalizado",
         clientName: a.client_name,
         clientPhone: a.client_phone,
         clientEmail: a.client_email,
@@ -1085,6 +1189,8 @@ export class SupabaseDataService {
         proposalId: a.proposal_id,
         triageSubmissionId: a.triage_submission_id,
         stepBlocks: a.step_blocks || [],
+        procedures: Array.isArray(a.procedures) ? a.procedures : [],
+        isUncommittedQuote: Boolean(a.is_uncommitted_quote),
         notes: a.notes,
         createdAt: a.created_at,
       }));
@@ -1092,6 +1198,31 @@ export class SupabaseDataService {
       console.error("Error fetching appointments from Supabase", err);
       return SalonStore.getAppointments();
     }
+  }
+
+  static async getAppointmentsByClientPhone(phone: string): Promise<Appointment[]> {
+    let cleanPhone = (phone || "").replace(/\D/g, "");
+    if (cleanPhone.startsWith("55") && cleanPhone.length > 11) {
+      cleanPhone = cleanPhone.slice(2);
+    }
+    if (!cleanPhone) return [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const allApts = await this.getAppointments();
+        return allApts.filter((a) => {
+          let aPhone = (a.clientPhone || "").replace(/\D/g, "");
+          if (aPhone.startsWith("55") && aPhone.length > 11) {
+            aPhone = aPhone.slice(2);
+          }
+          return aPhone.includes(cleanPhone) || cleanPhone.includes(aPhone);
+        });
+      } catch (e) {
+        console.warn("Direct getAppointmentsByClientPhone query failed, falling back to localStore", e);
+      }
+    }
+
+    return SalonStore.getAppointmentsByClientPhone(phone);
   }
 
   static async saveAppointment(apt: Appointment): Promise<Appointment> {
@@ -1116,7 +1247,10 @@ export class SupabaseDataService {
       const payload: Record<string, unknown> = {
         org_id: orgId,
         professional_id: professionalId,
-        service_id: resolveValidUuid(apt.serviceId),
+        service_id: resolveValidUuid(apt.serviceId) || DEFAULT_SERVICE_ID,
+        service_title: apt.serviceTitle || null,
+        procedures: apt.procedures || [],
+        is_uncommitted_quote: Boolean(apt.isUncommittedQuote),
         client_name: apt.clientName,
         client_phone: apt.clientPhone,
         client_email: apt.clientEmail || null,
@@ -1204,7 +1338,7 @@ export class SupabaseDataService {
           console.error("Error fetching salon_clients from Supabase", error);
           clients = SalonStore.getClients();
         } else {
-          clients = (data || []).map((c) => ({
+          clients = (data || []).map((c: any) => ({
             id: c.id,
             orgId: c.org_id,
             name: c.name,
@@ -1774,5 +1908,8 @@ export class SupabaseDataService {
   getAvailabilityTemplates = SupabaseDataService.getAvailabilityTemplates;
   saveAvailabilityTemplate = SupabaseDataService.saveAvailabilityTemplate;
   getProposalsByClientPhone = SupabaseDataService.getProposalsByClientPhone;
+  getAppointmentsByClientPhone = SupabaseDataService.getAppointmentsByClientPhone;
+  recordProposalFirstView = SupabaseDataService.recordProposalFirstView;
+  approveTriageDirectly = SupabaseDataService.approveTriageDirectly;
 }
 

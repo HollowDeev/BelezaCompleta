@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SalonOrganization, UserProfile } from "@/types/salon";
 import { SupabaseDataService } from "@/lib/supabase/api";
 import { formatBRL } from "@/lib/utils";
+import {
+  DEFAULT_CONFIRMATION_MESSAGE,
+  interpolateMessageTokens,
+} from "@/lib/whatsapp/confirmation";
 import {
   Building2,
   Phone,
@@ -21,6 +25,9 @@ import {
   Globe,
   Clock,
   ExternalLink,
+  MessageCircle,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 
 interface SalonSettingsViewProps {
@@ -37,7 +44,18 @@ export function SalonSettingsView({
   onUpdateProfile,
 }: SalonSettingsViewProps) {
   // Aba ativa interna de configurações
-  const [activeSubTab, setActiveSubTab] = useState<"contato" | "meta" | "senha" | "perfil">("contato");
+  const [activeSubTab, setActiveSubTab] = useState<"contato" | "meta" | "mensagens" | "senha" | "perfil">("contato");
+
+  // Estado: Mensagem de Confirmação WhatsApp (R5)
+  const [confirmationMessage, setConfirmationMessage] = useState(
+    organization?.settings?.defaultConfirmationMessage || DEFAULT_CONFIRMATION_MESSAGE
+  );
+
+  useEffect(() => {
+    if (organization?.settings?.defaultConfirmationMessage) {
+      setConfirmationMessage(organization.settings.defaultConfirmationMessage);
+    }
+  }, [organization?.settings?.defaultConfirmationMessage]);
 
   // Estado: Dados de Contato e Salão
   const [salonName, setSalonName] = useState(organization?.name || "Espaço da Beleza Gleicy Ronha");
@@ -125,6 +143,37 @@ export function SalonSettingsView({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Salvar Mensagem Padrão de Confirmação WhatsApp (R5)
+  const handleSaveConfirmationMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await onUpdateOrganization({
+        settings: {
+          ...(organization?.settings || {
+            isSharedMode: true,
+            allowSelfRegistration: false,
+            requireTriageApprovalHours: 48,
+            pixDiscountPercent: 5,
+            maxParallelInPause: 1,
+          }),
+          defaultConfirmationMessage: confirmationMessage,
+        },
+      });
+      showToast("Mensagem padrão de confirmação salva com sucesso!");
+    } catch (err) {
+      console.error(err);
+      showToast("Erro ao salvar mensagem de confirmação.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRestoreDefaultMessage = () => {
+    setConfirmationMessage(DEFAULT_CONFIRMATION_MESSAGE);
+    showToast("Mensagem padrão restaurada. Clique em salvar para persistir.");
   };
 
   // Salvar Nova Senha
@@ -266,6 +315,18 @@ export function SalonSettingsView({
         >
           <Target className="w-3.5 h-3.5 text-[#C7A03A]" />
           <span>Meta Diária de Faturamento</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab("mensagens")}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === "mensagens"
+              ? "bg-[#1D3D3C] text-[#D9B85F] shadow-xs border border-[#C7A03A]/40"
+              : "text-[#736455] hover:text-[#1D3D3C] hover:bg-white/60"
+          }`}
+        >
+          <MessageCircle className="w-3.5 h-3.5 text-[#C7A03A]" />
+          <span>Mensagens WhatsApp</span>
         </button>
 
         <button
@@ -513,7 +574,119 @@ export function SalonSettingsView({
       )}
 
       {/* ========================================================
-          ABA 3: SEGURANÇA & ALTERAR SENHA
+          ABA 3: MENSAGENS PADRÃO DE CONFIRMAÇÃO WHATSAPP (R5.1, R5.2)
+          ======================================================== */}
+      {activeSubTab === "mensagens" && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6 animate-fade-in">
+          <div className="border-b border-[#E7DCCE]/60 pb-4">
+            <h2 className="font-editorial text-xl font-bold text-[#2D1914] flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-[#C7A03A]" />
+              <span>Mensagem Padrão de Confirmação (WhatsApp)</span>
+            </h2>
+            <p className="text-xs text-stone-500 mt-1">
+              Personalize o texto enviado diretamente para as clientes ao confirmar agendamentos. Esta mensagem reforça as diretrizes oficiais de cancelamento com 24h e 50% de retenção de crédito.
+            </p>
+          </div>
+
+          {/* Tokens Disponíveis para Interpolação */}
+          <div className="p-4 rounded-2xl bg-[#FCF9F0] border border-[#C7A03A]/40 space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-[#80611F] block">
+              Variáveis Dinâmicas Disponíveis:
+            </span>
+            <p className="text-xs text-stone-600">
+              Você pode incluir as seguintes marcações no texto. Elas serão substituídas automaticamente pelos dados reais da cliente no momento do envio:
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {[
+                { token: "{cliente}", desc: "Nome da cliente" },
+                { token: "{servico}", desc: "Procedimento agendado" },
+                { token: "{data}", desc: "Data do agendamento" },
+                { token: "{horario}", desc: "Horário de início" },
+                { token: "{valor}", desc: "Valor total formatado" },
+              ].map((t) => (
+                <button
+                  key={t.token}
+                  type="button"
+                  onClick={() => setConfirmationMessage((prev) => `${prev} ${t.token}`)}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-[#D8D0BD] text-xs font-mono font-bold text-[#1D3D3C] hover:border-[#C7A03A] hover:bg-[#FAF7F2] transition-colors flex items-center gap-1.5"
+                  title={`Inserir ${t.token} no texto`}
+                >
+                  <span className="text-[#AD841D]">{t.token}</span>
+                  <span className="text-[10px] text-stone-400 font-sans font-normal">({t.desc})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveConfirmationMessage} className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-[#2D1914] uppercase tracking-wider">
+                  Template da Mensagem de Confirmação
+                </label>
+                <span className="text-[11px] font-mono text-stone-400">
+                  {confirmationMessage.length} caracteres
+                </span>
+              </div>
+              <textarea
+                rows={9}
+                value={confirmationMessage}
+                onChange={(e) => setConfirmationMessage(e.target.value)}
+                required
+                className="w-full px-4 py-3 rounded-2xl border border-[#D8D0BD] bg-[#FAF7F2] text-xs font-mono text-[#1D3D3C] focus:bg-white focus:border-[#C7A03A] outline-none transition-all leading-relaxed"
+                placeholder="Digite a mensagem padrão..."
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={handleRestoreDefaultMessage}
+                className="px-4 py-2 rounded-xl border border-[#D8D0BD] bg-[#FAF7F2] hover:bg-[#EEE8DD] text-xs font-bold text-[#736455] hover:text-[#1D3D3C] flex items-center space-x-1.5 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#AD841D]" />
+                <span>Restaurar Mensagem Padrão</span>
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#2D1914] gold-gradient hover:opacity-95 shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSaving ? "Salvando..." : "Salvar Mensagem de Confirmação"}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Pré-visualização ao Vivo no WhatsApp */}
+          <div className="space-y-2 pt-4 border-t border-[#E7DCCE]/60">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-[#AD841D] block">
+              Pré-visualização ao Vivo (Como a Cliente Receberá no WhatsApp):
+            </span>
+            <div className="p-4 sm:p-6 rounded-2xl bg-[#EFEAE2] border border-[#D8D0BD] shadow-inner max-w-xl">
+              <div className="bg-[#DCF8C6] border border-[#B7E4A8] text-[#111B21] p-3.5 rounded-2xl rounded-tr-none shadow-xs text-xs space-y-2 relative">
+                <p className="whitespace-pre-line leading-relaxed font-sans">
+                  {interpolateMessageTokens(confirmationMessage, {
+                    cliente: "Mariana Silva",
+                    servico: "Corte Especializado & Tratamento",
+                    data: "25/11/2026",
+                    horario: "14:30",
+                    valor: "R$ 180,00",
+                  })}
+                </p>
+                <div className="flex items-center justify-end space-x-1 text-[10px] text-stone-500 pt-1">
+                  <span>14:32</span>
+                  <span className="text-sky-500 font-bold">✓✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          ABA 4: SEGURANÇA & ALTERAR SENHA
           ======================================================== */}
       {activeSubTab === "senha" && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6 animate-fade-in">

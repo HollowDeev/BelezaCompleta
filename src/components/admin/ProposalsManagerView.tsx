@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LuxuryProposal } from "@/types/proposal";
 import { formatBRL, generateWhatsAppLink } from "@/lib/utils";
+import { generateProposalWhatsAppMessage } from "@/lib/proposals/sharing";
 import {
   FileText,
   Copy,
@@ -15,20 +16,39 @@ import {
   TrendingUp,
   Percent,
   MessageCircle,
+  Eye,
+  EyeOff,
+  Plus,
 } from "lucide-react";
 
 interface ProposalsManagerViewProps {
   proposals: LuxuryProposal[];
   onViewProposal: (proposalId: string) => void;
   onEditProposal?: (proposal: LuxuryProposal) => void;
+  onCreateManualProposal?: () => void;
 }
 
 export function ProposalsManagerView({
   proposals,
   onViewProposal,
   onEditProposal,
+  onCreateManualProposal,
 }: ProposalsManagerViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const formatFirstViewed = (isoString?: string) => {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${day}/${month} às ${hours}:${minutes}`;
+    } catch {
+      return isoString;
+    }
+  };
 
   const handleCopyLink = (proposalId: string) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -67,37 +87,64 @@ export function ProposalsManagerView({
           </div>
         </div>
 
-        {/* Indicadores Comerciais Rápidos */}
-        <div className="flex items-center gap-3 bg-[#FAF7F2] p-1.5 px-3 rounded-2xl border border-[#D8D0BD]">
-          <div className="text-center px-2">
-            <span className="text-[10px] text-[#736455] uppercase font-semibold block">Total</span>
-            <span className="text-xs font-bold text-[#1D3D3C]">{totalCount}</span>
-          </div>
-          <div className="h-6 w-px bg-[#D8D0BD]" />
-          <div className="text-center px-2">
-            <span className="text-[10px] text-emerald-800 uppercase font-semibold block">Aprovadas</span>
-            <span className="text-xs font-bold text-emerald-800">{approvedCount}</span>
-          </div>
-          <div className="h-6 w-px bg-[#D8D0BD]" />
-          <div className="text-center px-2">
-            <span className="text-[10px] text-[#80611F] uppercase font-semibold block">Conversão</span>
-            <span className="text-xs font-bold text-[#80611F]">{conversionRate}%</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Botão de Criação de Proposta Manual */}
+          {onCreateManualProposal && (
+            <button
+              onClick={onCreateManualProposal}
+              className="px-4 py-2 bg-[#1D3D3C] hover:bg-[#152e2d] text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm border border-[#C7A03A]/50 shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-[#D9B85F]" />
+              <span>+ Nova Proposta Manual</span>
+            </button>
+          )}
+
+          {/* Indicadores Comerciais Rápidos */}
+          <div className="flex items-center gap-3 bg-[#FAF7F2] p-1.5 px-3 rounded-2xl border border-[#D8D0BD]">
+            <div className="text-center px-2">
+              <span className="text-[10px] text-[#736455] uppercase font-semibold block">Total</span>
+              <span className="text-xs font-bold text-[#1D3D3C]">{totalCount}</span>
+            </div>
+            <div className="h-6 w-px bg-[#D8D0BD]" />
+            <div className="text-center px-2">
+              <span className="text-[10px] text-emerald-800 uppercase font-semibold block">Aprovadas</span>
+              <span className="text-xs font-bold text-emerald-800">{approvedCount}</span>
+            </div>
+            <div className="h-6 w-px bg-[#D8D0BD]" />
+            <div className="text-center px-2">
+              <span className="text-[10px] text-[#80611F] uppercase font-semibold block">Conversão</span>
+              <span className="text-xs font-bold text-[#80611F]">{conversionRate}%</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* LISTAGEM DE PROPOSTAS */}
       {proposals.length === 0 ? (
-        <div className="py-12 text-center text-xs text-[#736455] bg-[#FAF7F2] rounded-2xl border border-dashed border-[#D8D0BD]">
-          Nenhuma proposta comercial gerada ainda. Acesse a <strong>Fila de Triagens</strong> para criar propostas para clientes que responderam ao questionário.
+        <div className="py-12 text-center text-xs text-[#736455] bg-[#FAF7F2] rounded-2xl border border-dashed border-[#D8D0BD] space-y-3">
+          <p>
+            Nenhuma proposta comercial gerada ainda. Acesse a <strong>Fila de Triagens</strong> para criar propostas para clientes que responderam ao questionário, ou crie uma proposta manual avulsa.
+          </p>
+          {onCreateManualProposal && (
+            <div>
+              <button
+                onClick={onCreateManualProposal}
+                className="px-4 py-2 bg-[#1D3D3C] text-white rounded-xl font-bold text-xs inline-flex items-center gap-2 hover:bg-[#152e2d] transition-all shadow-xs border border-[#C7A03A]/40 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#D9B85F]" />
+                <span>+ Nova Proposta Manual</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {proposals.map((prop) => {
             const isApproved = prop.status === "approved";
+            const firstViewed = prop.firstViewedAt || (prop as any).first_viewed_at;
             const origin = typeof window !== "undefined" ? window.location.origin : "";
             const proposalUrl = `${origin}/proposta/${prop.id}`;
-            const shareText = `Olá, ${prop.clientName}! ✨\n\nSua proposta comercial personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
+            const shareText = generateProposalWhatsAppMessage(prop, origin);
             const whatsappUrl = generateWhatsAppLink(prop.clientPhone, shareText);
 
             return (
@@ -106,7 +153,7 @@ export function ProposalsManagerView({
                 className="p-5 sm:p-6 rounded-2xl border border-[#D8D0BD] bg-[#FCF5EB]/60 hover:bg-[#FCF5EB] transition-all flex flex-col justify-between shadow-2xs hover:border-[#C7A03A]"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className="font-bold text-base text-[#1D3D3C]">{prop.clientName}</span>
                     {isApproved ? (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -115,6 +162,21 @@ export function ProposalsManagerView({
                     ) : (
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/50">
                         Aguardando Aceite
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Indicador de Visualização / Primeiro Acesso (R7.4) */}
+                  <div className="mb-2.5">
+                    {firstViewed ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <Eye className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Visualizada pela cliente em {formatFirstViewed(firstViewed)}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-0.5 rounded-full bg-stone-50 text-stone-500 border border-stone-200">
+                        <EyeOff className="w-3 h-3 text-stone-400 shrink-0" />
+                        <span>Ainda não visualizada</span>
                       </span>
                     )}
                   </div>

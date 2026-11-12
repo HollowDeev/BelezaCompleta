@@ -13,6 +13,7 @@ import { PreReservation, AvailableDay } from "@/types/availability";
 import { Appointment } from "@/types/appointment";
 import { formatBRL } from "@/lib/utils";
 import { PhotoGalleryLightbox, GalleryPhoto } from "@/components/common/PhotoGalleryLightbox";
+import { SalonStore } from "@/lib/storage/localStore";
 import {
   validateProposalScheduleFeasibility,
   ProposalFeasibilityResult,
@@ -39,15 +40,17 @@ import {
   AlertCircle,
   Clock4,
   MessageCircle,
+  User,
 } from "lucide-react";
 
 interface ProposalBuilderModalProps {
-  submission: TriageSubmission;
+  submission?: TriageSubmission | null;
   initialProposal?: LuxuryProposal | null;
   services?: ServiceItem[];
   preReservation?: PreReservation | null;
   existingAppointments?: Appointment[];
   availableDays?: AvailableDay[];
+  isManualMode?: boolean;
   onSave: (proposal: LuxuryProposal, openWhatsApp?: boolean) => void;
   onClose: () => void;
 }
@@ -59,55 +62,126 @@ export function ProposalBuilderModal({
   preReservation,
   existingAppointments = [],
   availableDays = [],
+  isManualMode = false,
   onSave,
   onClose,
 }: ProposalBuilderModalProps) {
+  // Estados para modo manual de proposta
+  const [manualClientName, setManualClientName] = useState(
+    initialProposal?.clientName || submission?.clientName || ""
+  );
+  const [manualClientPhone, setManualClientPhone] = useState(
+    initialProposal?.clientPhone || submission?.clientPhone || ""
+  );
+  const [manualClientEmail, setManualClientEmail] = useState(
+    initialProposal?.clientEmail || submission?.clientEmail || ""
+  );
+  const [manualServiceId, setManualServiceId] = useState<string>(() => {
+    if (initialProposal?.items?.[0]?.serviceTitle) {
+      const match = services.find(
+        (s) => s.title.toLowerCase() === initialProposal.items[0].serviceTitle.toLowerCase()
+      );
+      if (match) return match.id;
+    }
+    return services[0]?.id || "";
+  });
+  const [selectedRegisteredClientId, setSelectedRegisteredClientId] = useState<string>("");
+
+  const registeredClients = useMemo(() => {
+    try {
+      return SalonStore.getClients();
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const formatPhoneInput = (val: string) => {
+    const digits = val.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  };
+
+  const handleSelectRegisteredClient = (clientId: string) => {
+    setSelectedRegisteredClientId(clientId);
+    const found = registeredClients.find((c) => c.id === clientId);
+    if (found) {
+      setManualClientName(found.name);
+      setManualClientPhone(formatPhoneInput(found.phone));
+      if (found.email) setManualClientEmail(found.email);
+    }
+  };
+
+  const effectiveClientName =
+    (manualClientName && manualClientName.trim()) ||
+    submission?.clientName ||
+    initialProposal?.clientName ||
+    "Cliente";
+
+  const effectiveClientPhone =
+    (manualClientPhone && manualClientPhone.trim()) ||
+    submission?.clientPhone ||
+    initialProposal?.clientPhone ||
+    "";
+
+  const effectiveClientEmail =
+    (manualClientEmail && manualClientEmail.trim()) ||
+    submission?.clientEmail ||
+    initialProposal?.clientEmail ||
+    "";
+
   // 1. Identificação de Encaixe / Pré-Reserva
   const isEncaixe = useMemo(() => {
     return (
       Boolean(preReservation) ||
-      submission.preferredTimeSlot?.toLowerCase().includes("encaixe") ||
-      submission.preferredTimeSlot?.toLowerCase().includes("flex") ||
-      submission.preferredTimeSlot?.toLowerCase().includes("reserva")
+      Boolean(submission?.preferredTimeSlot?.toLowerCase().includes("encaixe")) ||
+      Boolean(submission?.preferredTimeSlot?.toLowerCase().includes("flex")) ||
+      Boolean(submission?.preferredTimeSlot?.toLowerCase().includes("reserva"))
     );
-  }, [preReservation, submission.preferredTimeSlot]);
+  }, [preReservation, submission?.preferredTimeSlot]);
 
   // Data e Horário Solicitados pela Cliente
   const clientRequestedDate = useMemo(() => {
     return (
       preReservation?.requestedDate ||
-      submission.preferredDate ||
+      submission?.preferredDate ||
       new Date().toISOString().split("T")[0]
     );
-  }, [preReservation, submission.preferredDate]);
+  }, [preReservation, submission?.preferredDate]);
 
   const clientRequestedTime = useMemo(() => {
     return (
       preReservation?.preferredTime ||
-      submission.preferredTimeSlot ||
-      "Horário flexível"
+      submission?.preferredTimeSlot ||
+      "09:00"
     );
-  }, [preReservation, submission.preferredTimeSlot]);
+  }, [preReservation, submission?.preferredTimeSlot]);
 
   // 2. Identificação do Serviço Escolhido pela Cliente
   const matchedService = useMemo(() => {
+    if ((isManualMode || !submission) && manualServiceId) {
+      const found = services.find((s) => s.id === manualServiceId);
+      if (found) return found;
+    }
     return (
       services.find(
         (s) =>
-          s.id === submission.serviceId ||
-          s.title.toLowerCase() === submission.serviceTitle?.toLowerCase()
+          s.id === submission?.serviceId ||
+          s.title.toLowerCase() === submission?.serviceTitle?.toLowerCase()
       ) ||
       services.find((s) =>
-        submission.serviceTitle?.toLowerCase().includes(s.title.toLowerCase())
+        submission?.serviceTitle?.toLowerCase().includes(s.title.toLowerCase())
       ) ||
       services[0]
     );
-  }, [services, submission.serviceId, submission.serviceTitle]);
+  }, [services, submission?.serviceId, submission?.serviceTitle, isManualMode, manualServiceId]);
 
   // 3. Extração e Análise Inteligente das Respostas da Triagem
+  const submissionAnswers = submission?.answers;
   const safeAnswers = useMemo(
-    () => (Array.isArray(submission?.answers) ? submission.answers : []),
-    [submission?.answers]
+    () => (Array.isArray(submissionAnswers) ? submissionAnswers : []),
+    [submissionAnswers]
   );
 
   const curvatureAns = useMemo(() => {
@@ -142,7 +216,7 @@ export function ProposalBuilderModal({
   const smartDefaults = useMemo(() => {
     const serviceTitle =
       matchedService?.title ||
-      submission.serviceTitle ||
+      submission?.serviceTitle ||
       "Transformação Personalizada";
     const servicePrice = Number(matchedService?.price) || 710;
     const isCurls =
@@ -151,7 +225,7 @@ export function ProposalBuilderModal({
       curvatureAns.toLowerCase().includes("ondulado");
 
     // Overview inteligente contextualizado
-    let overview = `${submission.clientName},\n\nA proposta para o seu cabelo foi desenhada de forma 100% exclusiva para o procedimento de ${serviceTitle}.`;
+    let overview = `${effectiveClientName},\n\nA proposta para o seu cabelo foi desenhada de forma 100% exclusiva para o procedimento de ${serviceTitle}.`;
     if (isCurls) {
       overview += `\n\nRespeitando seu padrão de curvatura natural ${
         curvatureAns ? `(${curvatureAns})` : ""
@@ -221,8 +295,8 @@ export function ProposalBuilderModal({
     };
   }, [
     matchedService,
-    submission.serviceTitle,
-    submission.clientName,
+    submission?.serviceTitle,
+    effectiveClientName,
     curvatureAns,
     chemicalAnswers,
     hasChemicalHistory,
@@ -300,7 +374,7 @@ export function ProposalBuilderModal({
 
   // Etapas técnicas do procedimento
   const defaultSteps: ProposalTechnicalStep[] = useMemo(() => {
-    const mainServiceName = matchedService?.title || submission.serviceTitle || "Serviço Principal";
+    const mainServiceName = matchedService?.title || submission?.serviceTitle || "Serviço Principal";
 
     if (
       initialScheduling?.technicalSteps &&
@@ -374,7 +448,7 @@ export function ProposalBuilderModal({
         serviceGroup: mainServiceName,
       },
     ];
-  }, [initialScheduling, matchedService, submission.serviceTitle]);
+  }, [initialScheduling, matchedService, submission?.serviceTitle]);
 
   const [technicalSteps, setTechnicalSteps] =
     useState<ProposalTechnicalStep[]>(defaultSteps);
@@ -475,7 +549,7 @@ export function ProposalBuilderModal({
 
   const handleAddStep = (isPrimordial = false) => {
     const mainServiceName =
-      matchedService?.title || submission.serviceTitle || "Serviço Principal";
+      matchedService?.title || submission?.serviceTitle || "Serviço Principal";
     const newId = `step-${Date.now()}`;
     const newStep: ProposalTechnicalStep = {
       id: newId,
@@ -573,7 +647,7 @@ export function ProposalBuilderModal({
     basePrice: number
   ): ProposalItem[] => {
     const mainServiceName =
-      matchedService?.title || submission.serviceTitle || "Serviço Principal";
+      matchedService?.title || submission?.serviceTitle || "Serviço Principal";
 
     const pSteps = steps.filter((s) => s.isPrimordial !== false);
 
@@ -651,7 +725,7 @@ export function ProposalBuilderModal({
   // Módulos / Etapas Financeiras da proposta
   const [modules, setModules] = useState<ProposalItem[]>(() => {
     const mainServiceName =
-      matchedService?.title || submission.serviceTitle || "Serviço Principal";
+      matchedService?.title || submission?.serviceTitle || "Serviço Principal";
 
     if (initialProposal?.items && initialProposal.items.length > 0) {
       return initialProposal.items.map((it, idx) => {
@@ -704,7 +778,7 @@ export function ProposalBuilderModal({
   // Função inteligente para equilibrar as etapas primordiais somando o valor base do serviço
   const handleBalancePrimordialPrice = () => {
     const mainServiceName =
-      matchedService?.title || submission.serviceTitle || "Serviço Principal";
+      matchedService?.title || submission?.serviceTitle || "Serviço Principal";
     const primaryIdx = primordialModules.findIndex(
       (s) =>
         s.stepType === "active" &&
@@ -802,25 +876,25 @@ export function ProposalBuilderModal({
 
   const getClientPhotos = (): GalleryPhoto[] => {
     const list: GalleryPhoto[] = [];
-    if (submission.photos.currentHairRoot) {
+    if (submission?.photos?.currentHairRoot) {
       list.push({
         url: submission.photos.currentHairRoot,
         title: "Raiz Natural do Cabelo",
-        subtitle: `Cliente: ${submission.clientName} • Serviço: ${submission.serviceTitle || "Avaliação"}`,
+        subtitle: `Cliente: ${effectiveClientName} • Serviço: ${submission?.serviceTitle || "Avaliação"}`,
       });
     }
-    if (submission.photos.currentHairLength) {
+    if (submission?.photos?.currentHairLength) {
       list.push({
         url: submission.photos.currentHairLength,
         title: "Comprimento e Pontas dos Fios",
-        subtitle: `Cliente: ${submission.clientName} • Serviço: ${submission.serviceTitle || "Avaliação"}`,
+        subtitle: `Cliente: ${effectiveClientName} • Serviço: ${submission?.serviceTitle || "Avaliação"}`,
       });
     }
-    if (submission.photos.inspirationDesired) {
+    if (submission?.photos?.inspirationDesired) {
       list.push({
         url: submission.photos.inspirationDesired,
         title: "Inspiração / Referência Desejada",
-        subtitle: `Cliente: ${submission.clientName} • Serviço: ${submission.serviceTitle || "Avaliação"}`,
+        subtitle: `Cliente: ${effectiveClientName} • Serviço: ${submission?.serviceTitle || "Avaliação"}`,
       });
     }
     return list;
@@ -903,15 +977,15 @@ export function ProposalBuilderModal({
       id: initialProposal?.id || `prop-${Date.now()}`,
       orgId:
         initialProposal?.orgId ||
-        submission.orgId ||
+        submission?.orgId ||
         "11111111-1111-4111-8111-111111111111",
       professionalId:
         initialProposal?.professionalId ||
         "58f26242-1e53-432e-b924-dea25ee2068a",
-      triageSubmissionId: submission.id,
-      clientName: submission.clientName,
-      clientPhone: submission.clientPhone,
-      clientEmail: submission.clientEmail,
+      triageSubmissionId: submission?.id || initialProposal?.triageSubmissionId || undefined,
+      clientName: effectiveClientName,
+      clientPhone: effectiveClientPhone,
+      clientEmail: effectiveClientEmail || undefined,
       title,
       subtitle,
       projectOverview,
@@ -952,13 +1026,29 @@ export function ProposalBuilderModal({
       creditCardTerms:
         "Valor integral, sujeito às condições de parcelamento e aos juros da maquininha, quando aplicáveis.",
       schedulingDetails,
-      photos: submission.photos,
+      photos: submission?.photos || initialProposal?.photos,
       status: initialProposal?.status || "sent",
       expiresAt:
         initialProposal?.expiresAt ||
         new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
       createdAt: initialProposal?.createdAt || new Date().toISOString(),
     };
+
+    if ((isManualMode || !submission) && effectiveClientPhone && effectiveClientName) {
+      try {
+        SalonStore.saveClient({
+          id: `client-${Date.now()}`,
+          orgId: proposal.orgId,
+          name: effectiveClientName,
+          phone: effectiveClientPhone,
+          email: effectiveClientEmail || undefined,
+          totalAppointments: 0,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("Could not save manual client to SalonStore", e);
+      }
+    }
 
     onSave(proposal, openWhatsApp);
   };
@@ -974,7 +1064,11 @@ export function ProposalBuilderModal({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] uppercase tracking-widest text-[#AD841D] font-bold">
-                {initialProposal ? "Edição de Proposta" : "Gerador Integrado de Proposta & Agenda"}
+                {isManualMode || !submission
+                  ? "Criação de Proposta Manual"
+                  : initialProposal
+                  ? "Edição de Proposta"
+                  : "Gerador Integrado de Proposta & Agenda"}
               </span>
               {isEncaixe && (
                 <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
@@ -985,10 +1079,10 @@ export function ProposalBuilderModal({
             <h2 className="font-editorial text-xl sm:text-2xl font-bold text-[#2D1914] flex items-center gap-2 flex-wrap">
               <span>
                 {initialProposal ? "Editar Proposta de" : "Construir Proposta para"}{" "}
-                {submission.clientName}
+                {effectiveClientName}
               </span>
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-[#AD841D] border border-amber-200">
-                {submission.serviceTitle}
+                {matchedService?.title || submission?.serviceTitle || "Procedimento Personalizado"}
               </span>
             </h2>
           </div>
@@ -1045,6 +1139,104 @@ export function ProposalBuilderModal({
 
         {/* Corpo do Modal com Scroll */}
         <div className="p-5 sm:p-7 overflow-y-auto space-y-7 flex-1 text-xs sm:text-sm">
+          {/* Seção de Dados da Cliente para Proposta Manual */}
+          {(isManualMode || !submission) && (
+            <div className="p-5 rounded-2xl bg-[#FFFDF9] border-2 border-[#C59B27]/40 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#E7DCCE] gap-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-[#C59B27]" />
+                  <h3 className="font-bold text-sm sm:text-base text-[#2D1914]">
+                    Identificação da Cliente &amp; Procedimento Principal
+                  </h3>
+                </div>
+                {registeredClients.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-stone-600 font-medium whitespace-nowrap">Cliente Cadastrada:</label>
+                    <select
+                      value={selectedRegisteredClientId}
+                      onChange={(e) => handleSelectRegisteredClient(e.target.value)}
+                      className="text-xs bg-white border border-[#E7DCCE] rounded-lg px-2.5 py-1.5 text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#C59B27]"
+                    >
+                      <option value="">-- Selecionar ou digitar nova --</option>
+                      {registeredClients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.phone})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                    Nome da Cliente *
+                  </label>
+                  <input
+                    type="text"
+                    value={manualClientName}
+                    onChange={(e) => setManualClientName(e.target.value)}
+                    placeholder="Ex: Amanda Ferreira"
+                    className="w-full text-xs bg-white border border-[#E7DCCE] rounded-xl px-3 py-2 text-stone-900 focus:ring-2 focus:ring-[#C59B27] focus:outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                    WhatsApp com DDD *
+                  </label>
+                  <input
+                    type="tel"
+                    value={manualClientPhone}
+                    onChange={(e) => setManualClientPhone(formatPhoneInput(e.target.value))}
+                    placeholder="(11) 99999-9999"
+                    className="w-full text-xs bg-white border border-[#E7DCCE] rounded-xl px-3 py-2 text-stone-900 focus:ring-2 focus:ring-[#C59B27] focus:outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                    E-mail (opcional)
+                  </label>
+                  <input
+                    type="email"
+                    value={manualClientEmail}
+                    onChange={(e) => setManualClientEmail(e.target.value)}
+                    placeholder="cliente@email.com"
+                    className="w-full text-xs bg-white border border-[#E7DCCE] rounded-xl px-3 py-2 text-stone-900 focus:ring-2 focus:ring-[#C59B27] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {services.length > 0 && (
+                <div className="pt-1">
+                  <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                    Procedimento Base do Catálogo
+                  </label>
+                  <select
+                    value={manualServiceId}
+                    onChange={(e) => {
+                      setManualServiceId(e.target.value);
+                      const found = services.find((s) => s.id === e.target.value);
+                      if (found) {
+                        setTitle(`Proposta Comercial: ${found.title}`);
+                        setSubtitle(`Plano exclusivo desenvolvido para os cabelos de ${effectiveClientName}`);
+                      }
+                    }}
+                    className="w-full text-xs bg-white border border-[#E7DCCE] rounded-xl px-3 py-2 text-stone-900 focus:ring-2 focus:ring-[#C59B27] focus:outline-none font-medium"
+                  >
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title} — {formatBRL(s.price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ============================================================== */}
           {/* ABA 1: AGENDA, ENCAIXE E ETAPAS TÉCNICAS                       */}
           {/* ============================================================== */}
@@ -1060,7 +1252,7 @@ export function ProposalBuilderModal({
                     </h3>
                   </div>
                   <span className="text-[11px] font-semibold text-stone-500">
-                    Cliente: {submission.clientName} ({submission.clientPhone})
+                    Cliente: {effectiveClientName} {effectiveClientPhone ? `(${effectiveClientPhone})` : ""}
                   </span>
                 </div>
 
@@ -1504,7 +1696,7 @@ export function ProposalBuilderModal({
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
                       <h5 className="font-bold text-xs uppercase tracking-wider text-[#2D1914]">
-                        Etapas do Serviço Principal ({matchedService?.title || submission.serviceTitle || "Serviço Base"})
+                        Etapas do Serviço Principal ({matchedService?.title || submission?.serviceTitle || "Serviço Base"})
                       </h5>
                     </div>
                     <span className="text-[11px] font-bold text-[#AD841D] bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
@@ -1761,15 +1953,15 @@ export function ProposalBuilderModal({
                 })()}
 
                 {/* Fotos da Cliente */}
-                {(submission.photos.currentHairRoot ||
-                  submission.photos.currentHairLength ||
-                  submission.photos.inspirationDesired) && (
+                {(submission?.photos?.currentHairRoot ||
+                  submission?.photos?.currentHairLength ||
+                  submission?.photos?.inspirationDesired) && (
                   <div className="pt-2 border-t border-[#E7DCCE]/60">
                     <span className="text-[11px] font-bold text-[#5E372C] block mb-2">
                       Fotos Enviadas pela Cliente (clique para ampliar):
                     </span>
                     <div className="grid grid-cols-3 gap-3">
-                      {submission.photos.currentHairRoot && (
+                      {submission?.photos?.currentHairRoot && (
                         <button
                           type="button"
                           onClick={() => handleOpenGallery(submission.photos.currentHairRoot!)}
@@ -1785,7 +1977,7 @@ export function ProposalBuilderModal({
                           </span>
                         </button>
                       )}
-                      {submission.photos.currentHairLength && (
+                      {submission?.photos?.currentHairLength && (
                         <button
                           type="button"
                           onClick={() => handleOpenGallery(submission.photos.currentHairLength!)}
@@ -1801,7 +1993,7 @@ export function ProposalBuilderModal({
                           </span>
                         </button>
                       )}
-                      {submission.photos.inspirationDesired && (
+                      {submission?.photos?.inspirationDesired && (
                         <button
                           type="button"
                           onClick={() => handleOpenGallery(submission.photos.inspirationDesired!)}
@@ -1862,7 +2054,7 @@ export function ProposalBuilderModal({
                           Serviço Principal
                         </span>
                         <h4 className="font-bold text-sm sm:text-base text-[#2D1914]">
-                          {matchedService?.title || submission.serviceTitle || "Serviço Base"}
+                          {matchedService?.title || submission?.serviceTitle || "Serviço Base"}
                         </h4>
                       </div>
                       <p className="text-[11px] text-stone-600 mt-1">

@@ -159,6 +159,7 @@ export const initialServices: ServiceItem[] = [
     description: "Iluminação nobre em tons de chocolate para valorizar a curvatura natural com técnica superclareadora sem agressão.",
     price: 710,
     promotionalPrice: 674.5,
+    priceType: "fixed",
     imageUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80",
     requiresTriage: true,
     triageFormId: "form-triage-iluminado",
@@ -209,6 +210,7 @@ export const initialServices: ServiceItem[] = [
     description: "Corte Shag com camadas que preservam o comprimento combinado com mecha lateral estratégica para iluminar o rosto.",
     price: 380,
     promotionalPrice: 380,
+    priceType: "fixed",
     imageUrl: "https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=800&auto=format&fit=crop&q=80",
     requiresTriage: true,
     triageFormId: "form-triage-iluminado",
@@ -258,6 +260,7 @@ export const initialServices: ServiceItem[] = [
     description: "Corte especializado em camadas leves para movimento e volume equilibrado com fitagem profissional.",
     price: 190,
     promotionalPrice: 150,
+    priceType: "fixed",
     imageUrl: "https://images.unsplash.com/photo-1580618672591-eb180b1a973f?w=800&auto=format&fit=crop&q=80",
     requiresTriage: false,
     steps: [
@@ -295,6 +298,7 @@ export const initialServices: ServiceItem[] = [
     description: "Tratamento de alto impacto para fios desidratados, restaurando maciez, brilho e elasticidade natural.",
     price: 220,
     promotionalPrice: 200,
+    priceType: "fixed",
     imageUrl: "https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=800&auto=format&fit=crop&q=80",
     requiresTriage: false,
     steps: [

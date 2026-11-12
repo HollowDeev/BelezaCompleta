@@ -14,6 +14,8 @@ import {
   Plus,
   FileText,
   TrendingUp,
+  CheckCircle2,
+  Edit3,
 } from "lucide-react";
 
 interface DayOperationViewProps {
@@ -25,6 +27,8 @@ interface DayOperationViewProps {
   onOpenNewAppointment: () => void;
   onOpenQuickProposal: (submission?: TriageSubmission) => void;
   onViewProposal: (proposalId: string) => void;
+  onConfirmAppointment?: (appointment: Appointment) => void;
+  onEditAppointment?: (appointment: Appointment) => void;
   dailyTargetRevenue?: number;
 }
 
@@ -37,11 +41,23 @@ export function DayOperationView({
   onOpenNewAppointment,
   onOpenQuickProposal,
   onViewProposal,
+  onConfirmAppointment,
+  onEditAppointment,
   dailyTargetRevenue = 1500,
 }: DayOperationViewProps) {
   // Filtra agendamentos do dia selecionado (apenas agendamentos reais/confirmados)
   const todayAppointments = appointments.filter(
-    (a) => a.date === selectedDate && a.status !== "cancelled" && a.status !== "pending_proposal"
+    (a) =>
+      a.date === selectedDate &&
+      a.status !== "cancelled" &&
+      a.status !== "pending_proposal" &&
+      a.status !== "uncommitted_quote" &&
+      !a.isUncommittedQuote
+  );
+
+  // Agendamentos diretos pendentes de confirmação (sem triagem)
+  const pendingConfirmations = appointments.filter(
+    (a) => a.status === "pending_confirmation" && !a.triageSubmissionId && !a.isUncommittedQuote
   );
 
   // Cálculos do Dia
@@ -78,7 +94,7 @@ export function DayOperationView({
   // Projeção de faturamento futuro: próximos 14 dias (confirmed e date > today)
   const future14DaysRevenue = appointments
     .filter((a) => {
-      if (a.status !== "confirmed") return false;
+      if (a.status !== "confirmed" || a.isUncommittedQuote) return false;
       const todayStr = new Date().toISOString().split("T")[0];
       const limitDate = new Date();
       limitDate.setDate(limitDate.getDate() + 14);
@@ -208,6 +224,84 @@ export function DayOperationView({
           </div>
         </div>
       </div>
+
+      {/* 2. ALERTA DE AGENDAMENTOS DIRETOS PENDENTES DE CONFIRMAÇÃO (R4.1, R4.2) */}
+      {pendingConfirmations.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-[#C7A03A]/60 shadow-xs flex flex-col space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#FCF9F0] border border-[#C7A03A]/60 text-[#80611F] flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-[#80611F]" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-[#80611F] block">
+                  Confirmação Necessária • Agendamento sem Triagem
+                </span>
+                <h3 className="font-bold text-sm text-[#2D1914]">
+                  {pendingConfirmations.length} agendamento(s) direto(s) aguardando sua confirmação!
+                </h3>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Ao confirmar, o horário é consolidado na grade e o WhatsApp com as orientações do salão é aberto automaticamente.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-[#C7A03A]/30">
+            {pendingConfirmations.map((apt) => (
+              <div
+                key={apt.id}
+                className="p-3 bg-white rounded-xl border border-[#E7DCCE] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#2D1914]">{apt.clientName}</span>
+                    <span className="text-stone-400">•</span>
+                    <span className="font-mono text-[#AD841D] font-bold">{apt.date} às {apt.startTime}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      Pendente
+                    </span>
+                  </div>
+                  <div className="text-stone-500 text-[11px] flex items-center gap-2">
+                    <span>{apt.serviceTitle}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-emerald-700">{formatBRL(apt.price)}</span>
+                    {apt.clientPhone && (
+                      <>
+                        <span>•</span>
+                        <span>WhatsApp: {apt.clientPhone}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  {onEditAppointment && (
+                    <button
+                      type="button"
+                      onClick={() => onEditAppointment(apt)}
+                      className="px-3 py-1.5 rounded-xl border border-[#D8D0BD] text-[#2D1914] bg-[#FAF7F2] hover:bg-[#EEE8DD] font-semibold text-xs flex items-center gap-1 transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-[#AD841D]" />
+                      <span>Editar</span>
+                    </button>
+                  )}
+                  {onConfirmAppointment && (
+                    <button
+                      type="button"
+                      onClick={() => onConfirmAppointment(apt)}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Confirmar &amp; Abrir WhatsApp</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 2. ALERTA DE TRIAGENS URGENTES PENDENTES */}
       {pendingTriages.length > 0 && (

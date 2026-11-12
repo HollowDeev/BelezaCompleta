@@ -24,6 +24,24 @@ function ProposalView() {
         const data = await SupabaseDataService.getProposalById(proposalId);
         if (data) {
           setProposal(data);
+          // R7.4: Se a proposta ainda não foi visualizada, registra o primeiro acesso
+          if (!data.firstViewedAt && !(data as any).first_viewed_at) {
+            SupabaseDataService.recordProposalFirstView(proposalId)
+              .then((updated) => {
+                if (updated) {
+                  setProposal((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          firstViewedAt: updated.firstViewedAt,
+                          first_viewed_at: (updated as any).first_viewed_at,
+                        }
+                      : prev
+                  );
+                }
+              })
+              .catch((e) => console.warn("Erro ao registrar primeiro acesso da proposta:", e));
+          }
         } else {
           setError("Proposta não encontrada ou expirada.");
         }

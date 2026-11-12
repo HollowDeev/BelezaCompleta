@@ -50,7 +50,12 @@ import {
   GraduationCap,
   MessageCircle,
 } from "lucide-react";
-import { generateWhatsAppLink } from "@/lib/utils";
+import { formatBRL, generateWhatsAppLink } from "@/lib/utils";
+import { getPendingUntriagedBadgeCount } from "@/lib/appointments/badges";
+import {
+  DEFAULT_CONFIRMATION_MESSAGE,
+  interpolateMessageTokens,
+} from "@/lib/whatsapp/confirmation";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -86,6 +91,7 @@ export default function DashboardPage() {
     setSelectedDate(`${y}-${m}-${d}`);
   }, []);
   const [isNewAppointmentModalOpen, setIsNewAppointmentModalOpen] = useState(false);
+  const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
   const [newAppointmentPrefill, setNewAppointmentPrefill] = useState<{
     date?: string;
     time?: string;
@@ -97,6 +103,7 @@ export default function DashboardPage() {
   const [activeSubmissionForProposal, setActiveSubmissionForProposal] = useState<TriageSubmission | null>(null);
   const [activePreReservationForProposal, setActivePreReservationForProposal] = useState<PreReservation | null>(null);
   const [editingProposal, setEditingProposal] = useState<LuxuryProposal | null>(null);
+  const [isCreatingManualProposal, setIsCreatingManualProposal] = useState<boolean>(false);
   const [viewingProposalModal, setViewingProposalModal] = useState<LuxuryProposal | null>(null);
 
   // Estados do Algoritmo de Ensino (Tutorial Interativo & Central)
@@ -233,6 +240,25 @@ export default function DashboardPage() {
     return unsubscribe;
   }, [authLoading, user, role]);
 
+  // Polling de segurança (30s) e re-sincronização imediata ao focar na janela/aba
+  useEffect(() => {
+    if (authLoading || !user || role === "client") return;
+
+    const handleFocus = () => {
+      refreshAll();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    const intervalId = setInterval(() => {
+      refreshAll();
+    }, 30000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(intervalId);
+    };
+  }, [authLoading, user, role]);
+
   // Assinatura em Tempo Real (Supabase Realtime) para Triagens, Agendamentos, Propostas e Pré-Reservas
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || authLoading || !user || role === "client") return;
@@ -280,14 +306,7 @@ export default function DashboardPage() {
         { event: "*", schema: "public", table: "proposals" },
         async () => {
           try {
-            const [props, apts, subs] = await Promise.all([
-              SupabaseDataService.getProposals(),
-              SupabaseDataService.getAppointments(),
-              SupabaseDataService.getTriageSubmissions(),
-            ]);
-            setProposals(props);
-            setAppointments(apts);
-            setTriageSubmissions(subs);
+            await refreshAll();
           } catch (e) {
             console.error("Erro ao atualizar propostas em realtime:", e);
           }
@@ -298,12 +317,7 @@ export default function DashboardPage() {
         { event: "*", schema: "public", table: "appointments" },
         async () => {
           try {
-            const [apts, clis] = await Promise.all([
-              SupabaseDataService.getAppointments(),
-              SupabaseDataService.getClients(),
-            ]);
-            setAppointments(apts);
-            setClients(clis);
+            await refreshAll();
           } catch (e) {
             console.error("Erro ao atualizar agendamentos em realtime:", e);
           }
@@ -321,7 +335,7 @@ export default function DashboardPage() {
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === "SUBSCRIBED") {
           console.log("✓ Canal Realtime do Dashboard conectado com sucesso!");
         }
@@ -334,7 +348,7 @@ export default function DashboardPage() {
     };
   }, [authLoading, user, role]);
 
-  // Salvar novo agendamento
+  // Salvar agendamento (criação ou edição)
   const handleSaveNewAppointment = async (newApt: Appointment) => {
     const saved = await SupabaseDataService.saveAppointment(newApt);
     if (newAppointmentPrefill.preReservationId) {
@@ -347,6 +361,134 @@ export default function DashboardPage() {
     }
     await refreshAll();
     setIsNewAppointmentModalOpen(false);
+    setAppointmentToEdit(null);
+    setNewAppointmentPrefill({});
+  };
+
+  // Abrir modal para editar agendamento existente (R3.1)
+  const handleEditAppointment = (apt: Appointment) => {
+    setAppointmentToEdit(apt);
+    setNewAppointmentPrefill({});
+    setIsNewAppointmentModalOpen(true);
+  };
+
+  // Confirmar agendamento e abrir WhatsApp com mensagem padrão (R4.2)
+  const handleConfirmAppointment = async (apt: Appointment) => {
+    const confirmedApt: Appointment = {
+      ...apt,
+      status: "confirmed",
+    };
+    await SupabaseDataService.saveAppointment(confirmedApt);
+    await refreshAll();
+
+    const template = organization?.settings?.defaultConfirmationMessage || DEFAULT_CONFIRMATION_MESSAGE;
+    const msg = interpolateMessageTokens(template, {
+      cliente: apt.clientName,
+      servico: apt.serviceTitle,
+      data: apt.date,
+      horario: apt.startTime,
+      valor: formatBRL(apt.price),
+    });
+    if (apt.clientPhone && typeof window !== "undefined") {
+      const waLink = generateWhatsAppLink(apt.clientPhone, msg);
+      window.open(waLink, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // Aprovação Direta de Triagem sem Proposta Comercial (R10.1)
+  const handleDirectApproveTriage = async (
+    submission: TriageSubmission,
+    date: string,
+    time: string,
+    price: number,
+    openWhatsApp: boolean
+  ) => {
+    const srv = services.find((s) => s.id === submission.serviceId) || services[0];
+    const totalDuration = srv?.steps ? srv.steps.reduce((sum, s) => sum + s.durationMin, 0) : 60;
+    const [h, m] = (time || "09:00").split(":").map(Number);
+    const startMinutes = (isNaN(h) ? 9 : h) * 60 + (isNaN(m) ? 0 : m);
+    const endMinutes = startMinutes + totalDuration;
+    const endTimeStr = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+
+    let cursor = startMinutes;
+    const blocks = (srv?.steps || []).map((st) => {
+      const stepStart = cursor;
+      const stepEnd = cursor + st.durationMin;
+      cursor = stepEnd;
+      return {
+        id: `blk-${Date.now()}-${st.id}`,
+        stepId: st.id,
+        stepTitle: st.title,
+        type: st.type,
+        startTime: `${String(Math.floor(stepStart / 60)).padStart(2, "0")}:${String(stepStart % 60).padStart(2, "0")}`,
+        endTime: `${String(Math.floor(stepEnd / 60)).padStart(2, "0")}:${String(stepEnd % 60).padStart(2, "0")}`,
+        durationMin: st.durationMin,
+        maxPauseDurationMin: st.maxPauseDurationMin,
+        isParallelSlotAllowed: st.type === "pause",
+      };
+    });
+
+    const existingApt = appointments.find((a) => a.triageSubmissionId === submission.id);
+    const aptToSave: Appointment = existingApt
+      ? {
+          ...existingApt,
+          date,
+          startTime: time,
+          endTime: endTimeStr,
+          status: "confirmed",
+          price: price || existingApt.price,
+          totalDurationMin: totalDuration,
+          stepBlocks: blocks.length > 0 ? blocks : existingApt.stepBlocks,
+        }
+      : {
+          id: `apt-${Date.now()}`,
+          orgId: submission.orgId || organization?.id || "11111111-1111-4111-8111-111111111111",
+          professionalId: srv?.professionalId || profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a",
+          professionalName: profile?.name || "Gleicy Ronha",
+          serviceId: srv?.id || submission.serviceId,
+          serviceTitle: srv?.title || submission.serviceTitle,
+          clientName: submission.clientName,
+          clientPhone: submission.clientPhone,
+          clientEmail: submission.clientEmail,
+          date,
+          startTime: time,
+          endTime: endTimeStr,
+          totalDurationMin: totalDuration,
+          status: "confirmed",
+          price: price || srv?.promotionalPrice || srv?.price || 150,
+          paymentStatus: "pending",
+          stepBlocks: blocks,
+          triageSubmissionId: submission.id,
+          notes: "Triagem aprovada diretamente sem proposta comercial.",
+          createdAt: new Date().toISOString(),
+        };
+
+    await SupabaseDataService.saveAppointment(aptToSave);
+    await SupabaseDataService.approveTriageDirectly(submission.id);
+
+    if (submission.preReservationId) {
+      await SupabaseDataService.updatePreReservationStatus(
+        submission.preReservationId,
+        "converted",
+        undefined,
+        aptToSave.id
+      );
+    }
+
+    await refreshAll();
+
+    if (openWhatsApp && submission.clientPhone && typeof window !== "undefined") {
+      const template = organization?.settings?.defaultConfirmationMessage || DEFAULT_CONFIRMATION_MESSAGE;
+      const msg = interpolateMessageTokens(template, {
+        cliente: submission.clientName,
+        servico: srv?.title || submission.serviceTitle,
+        data: date,
+        horario: time,
+        valor: formatBRL(price || aptToSave.price),
+      });
+      const waLink = generateWhatsAppLink(submission.clientPhone, msg);
+      window.open(waLink, "_blank", "noopener,noreferrer");
+    }
   };
 
   // Salvar proposta gerada ou editada
@@ -454,6 +596,7 @@ export default function DashboardPage() {
 
   const pendingTriageCount = triageSubmissions.filter((s) => s.status === "pending_review").length;
   const pendingPreReservationsCount = preReservations.filter((p) => p.status === "pending").length;
+  const pendingConfirmationsCount = getPendingUntriagedBadgeCount(appointments);
 
   return (
     <div className="min-h-screen bg-[#FCF5EB] text-[#1D3D3C] flex relative overflow-x-hidden">
@@ -479,6 +622,7 @@ export default function DashboardPage() {
         onSelectTab={handleSelectTab}
         pendingTriageCount={pendingTriageCount}
         pendingPreReservationsCount={pendingPreReservationsCount}
+        pendingConfirmationsCount={pendingConfirmationsCount}
         role={role}
       />
 
@@ -577,6 +721,7 @@ export default function DashboardPage() {
               selectedDate={selectedDate}
               onDateChange={setSelectedDate}
               onOpenNewAppointment={() => {
+                setAppointmentToEdit(null);
                 setNewAppointmentPrefill({});
                 setIsNewAppointmentModalOpen(true);
               }}
@@ -591,6 +736,8 @@ export default function DashboardPage() {
                 const prop = proposals.find((p) => p.id === propId);
                 if (prop) setViewingProposalModal(prop);
               }}
+              onConfirmAppointment={handleConfirmAppointment}
+              onEditAppointment={handleEditAppointment}
               dailyTargetRevenue={organization?.settings?.dailyTargetRevenue || 1500}
             />
           )}
@@ -601,13 +748,17 @@ export default function DashboardPage() {
               selectedDate={selectedDate}
               onSelectDate={setSelectedDate}
               onNewAppointment={(prefilledDate?: string, prefilledTime?: string) => {
+                setAppointmentToEdit(null);
                 setNewAppointmentPrefill({ date: prefilledDate, time: prefilledTime });
                 setIsNewAppointmentModalOpen(true);
               }}
+              onEditAppointment={handleEditAppointment}
+              onConfirmAppointment={handleConfirmAppointment}
               onSelectProposal={(propId: string) => {
                 const prop = proposals.find((p) => p.id === propId);
                 if (prop) setViewingProposalModal(prop);
               }}
+              defaultConfirmationMessage={organization?.settings?.defaultConfirmationMessage}
             />
           )}
 
@@ -700,6 +851,7 @@ export default function DashboardPage() {
                 const prop = proposals.find((p) => p.id === propId);
                 if (prop) setViewingProposalModal(prop);
               }}
+              onDirectApprove={handleDirectApproveTriage}
             />
           )}
 
@@ -712,6 +864,9 @@ export default function DashboardPage() {
               }}
               onEditProposal={(prop: LuxuryProposal) => {
                 setEditingProposal(prop);
+              }}
+              onCreateManualProposal={() => {
+                setIsCreatingManualProposal(true);
               }}
             />
           )}
@@ -780,7 +935,7 @@ export default function DashboardPage() {
       {/* Ilha Dinâmica Flutuante de Pausa Química */}
       <FloatingPill activeChemicalPause={null} />
 
-      {/* Modal Novo Agendamento */}
+      {/* Modal Novo / Editar Agendamento */}
       {isNewAppointmentModalOpen && (
         <NewAppointmentModal
           services={services}
@@ -790,35 +945,27 @@ export default function DashboardPage() {
           prefilledClientName={newAppointmentPrefill.clientName}
           prefilledClientPhone={newAppointmentPrefill.clientPhone}
           prefilledServiceId={newAppointmentPrefill.serviceId}
+          appointmentToEdit={appointmentToEdit}
           onSave={handleSaveNewAppointment}
-          onClose={() => setIsNewAppointmentModalOpen(false)}
+          onClose={() => {
+            setIsNewAppointmentModalOpen(false);
+            setAppointmentToEdit(null);
+            setNewAppointmentPrefill({});
+          }}
         />
       )}
 
       {/* Modal Gerador ou Editor de Proposta de Luxo */}
-      {(activeSubmissionForProposal || editingProposal) && (
+      {(activeSubmissionForProposal || editingProposal || isCreatingManualProposal) && (
         <ProposalBuilderModal
           submission={
-            activeSubmissionForProposal ||
-            triageSubmissions.find((s) => s.id === editingProposal?.triageSubmissionId) ||
-            ({
-              id: editingProposal?.triageSubmissionId || `sub-${Date.now()}`,
-              orgId: editingProposal?.orgId || "org-gleicy-ronha",
-              formId: "form-triage-iluminado",
-              serviceId: "srv-iluminado-chocolate",
-              serviceTitle: editingProposal?.subtitle || "Transformação Personalizada",
-              clientName: editingProposal?.clientName || "Cliente",
-              clientPhone: editingProposal?.clientPhone || "",
-              clientEmail: editingProposal?.clientEmail || "",
-              answers: [],
-              photos: {},
-              preferredDate: "A combinar",
-              preferredTimeSlot: "Horário flexível",
-              status: "pending_review",
-              createdAt: editingProposal?.createdAt || new Date().toISOString(),
-              submittedAt: editingProposal?.createdAt || new Date().toISOString(),
-            } as TriageSubmission)
+            isCreatingManualProposal
+              ? null
+              : activeSubmissionForProposal ||
+                triageSubmissions.find((s) => s.id === editingProposal?.triageSubmissionId) ||
+                null
           }
+          isManualMode={isCreatingManualProposal || (!activeSubmissionForProposal && !editingProposal?.triageSubmissionId)}
           initialProposal={editingProposal}
           services={services}
           preReservation={activePreReservationForProposal}
@@ -827,11 +974,13 @@ export default function DashboardPage() {
           onSave={(prop, openWA) => {
             handleSaveProposal(prop, openWA);
             setActivePreReservationForProposal(null);
+            setIsCreatingManualProposal(false);
           }}
           onClose={() => {
             setActiveSubmissionForProposal(null);
             setEditingProposal(null);
             setActivePreReservationForProposal(null);
+            setIsCreatingManualProposal(false);
           }}
         />
       )}

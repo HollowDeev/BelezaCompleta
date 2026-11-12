@@ -4,6 +4,7 @@
 export type GlaicySyncEventType =
   | "triage_created"
   | "triage_saved"
+  | "triage_approved"
   | "pre_reservation_saved"
   | "proposal_saved"
   | "proposal_approved"

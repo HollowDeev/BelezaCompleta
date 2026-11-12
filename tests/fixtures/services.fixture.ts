@@ -1,0 +1,140 @@
+import { ServiceItem } from "@/types/service";
+
+export const mockFixedService: ServiceItem = {
+  id: "srv-fixed-corte",
+  orgId: "org-default-01",
+  professionalId: "prof-gleicy",
+  title: "Corte Especializado em Cachos",
+  slug: "corte-cachos",
+  category: "corte",
+  description: "Corte a seco respeitando a curvatura natural e caimento dos fios.",
+  price: 180,
+  priceType: "fixed",
+  requiresTriage: false,
+  isActive: true,
+  steps: [
+    {
+      id: "step-corte-1",
+      order: 1,
+      title: "Análise e Corte a Seco",
+      type: "active",
+      durationMin: 60,
+      requiresExclusiveAttention: true,
+    },
+    {
+      id: "step-corte-2",
+      order: 2,
+      title: "Lavagem e Finalização",
+      type: "active",
+      durationMin: 30,
+      requiresExclusiveAttention: true,
+    },
+  ],
+};
+
+export const mockStartingAtService: ServiceItem = {
+  id: "srv-starting-mechas",
+  orgId: "org-default-01",
+  professionalId: "prof-gleicy",
+  title: "Mechas Criativas Iluminadas",
+  slug: "mechas-iluminadas",
+  category: "mechas",
+  description: "Clareamento estratégico preservando a saúde e elasticidade da fibra.",
+  price: 450,
+  maxPrice: 750,
+  priceType: "starting_at",
+  requiresTriage: true,
+  isActive: true,
+  steps: [
+    {
+      id: "step-mechas-1",
+      order: 1,
+      title: "Aplicação e Montagem de Papéis",
+      type: "active",
+      durationMin: 90,
+      requiresExclusiveAttention: true,
+    },
+    {
+      id: "step-mechas-2",
+      order: 2,
+      title: "Tempo de Ação Química",
+      type: "pause",
+      durationMin: 45,
+      maxPauseDurationMin: 60,
+      requiresExclusiveAttention: false,
+    },
+    {
+      id: "step-mechas-3",
+      order: 3,
+      title: "Matização e Tratamento",
+      type: "active",
+      durationMin: 45,
+      requiresExclusiveAttention: true,
+    },
+  ],
+};
+
+export const mockLegacyServiceWithoutPriceType: any = {
+  id: "srv-legacy-hidra",
+  orgId: "org-default-01",
+  professionalId: "prof-gleicy",
+  title: "Hidratação Profunda com Ozônio",
+  slug: "hidratacao-ozonio",
+  category: "tratamento",
+  description: "Tratamento de reposição lipídica e hidratação profunda.",
+  price: 150,
+  // Note: priceType and maxPrice are deliberately undefined as legacy data
+  requiresTriage: false,
+  isActive: true,
+  steps: [
+    {
+      id: "step-hidra-1",
+      order: 1,
+      title: "Higienização e Aplicação da Máscara",
+      type: "active",
+      durationMin: 20,
+      requiresExclusiveAttention: true,
+    },
+    {
+      id: "step-hidra-2",
+      order: 2,
+      title: "Pausa com Vapor de Ozônio",
+      type: "pause",
+      durationMin: 25,
+      maxPauseDurationMin: 35,
+      requiresExclusiveAttention: false,
+    },
+    {
+      id: "step-hidra-3",
+      order: 3,
+      title: "Enxágue e Definição",
+      type: "active",
+      durationMin: 25,
+      requiresExclusiveAttention: true,
+    },
+  ],
+};
+
+export const mockTratamentoService: ServiceItem = {
+  id: "srv-tratamento-nutricao",
+  orgId: "org-default-01",
+  professionalId: "prof-gleicy",
+  title: "Nutrição Lipídica Intensiva",
+  slug: "nutricao-lipidica",
+  category: "tratamento",
+  description: "Devolve maciez e brilho para fios ressecados.",
+  price: 120,
+  priceType: "fixed",
+  requiresTriage: false,
+  isActive: true,
+  steps: [
+    {
+      id: "step-nutri-1",
+      order: 1,
+      title: "Aplicação de Óleos e Máscara",
+      type: "active",
+      durationMin: 30,
+      requiresExclusiveAttention: true,
+    },
+  ],
+};

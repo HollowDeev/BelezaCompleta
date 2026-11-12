@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS public.services (
     description TEXT,
     price NUMERIC(10, 2) NOT NULL,
     promotional_price NUMERIC(10, 2),
+    price_type VARCHAR(20) DEFAULT 'fixed', -- 'fixed' ou 'starting_at'
+    max_price NUMERIC(10, 2),
     image_url TEXT,
     requires_triage BOOLEAN DEFAULT FALSE,
     triage_form_id UUID,
@@ -147,6 +149,7 @@ CREATE TABLE IF NOT EXISTS public.proposals (
     pix_total NUMERIC(10, 2) NOT NULL,
     status VARCHAR(30) DEFAULT 'sent', -- 'draft', 'sent', 'approved', 'rejected'
     expires_at TIMESTAMP WITH TIME ZONE,
+    first_viewed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     approved_at TIMESTAMP WITH TIME ZONE
 );
@@ -166,7 +169,10 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     professional_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE CASCADE,
+    service_id UUID REFERENCES public.services(id) ON DELETE SET NULL, -- Permite NULL para agendamentos personalizados / montar atendimento
+    service_title VARCHAR(255),
+    procedures JSONB DEFAULT '[]'::jsonb,
+    is_uncommitted_quote BOOLEAN DEFAULT FALSE,
     client_name VARCHAR(255) NOT NULL,
     client_phone VARCHAR(30) NOT NULL,
     client_email VARCHAR(255),

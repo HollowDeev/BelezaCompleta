@@ -8,6 +8,7 @@ import { ServiceItem } from "@/types/service";
 import { Appointment } from "@/types/appointment";
 import { AvailableDay } from "@/types/availability";
 import { PhotoGalleryLightbox, GalleryPhoto } from "@/components/common/PhotoGalleryLightbox";
+import { formatBRL } from "@/lib/utils";
 import {
   Sparkles,
   Camera,
@@ -26,6 +27,7 @@ import {
   Layers,
   Eye,
   Check,
+  X,
 } from "lucide-react";
 
 interface TriageReviewQueueProps {
@@ -36,6 +38,13 @@ interface TriageReviewQueueProps {
   availableDays?: AvailableDay[];
   onGenerateProposal: (proposal: LuxuryProposal, openWhatsApp?: boolean) => void;
   onViewProposal: (proposalId: string) => void;
+  onDirectApprove?: (
+    submission: TriageSubmission,
+    date: string,
+    time: string,
+    price: number,
+    openWhatsApp: boolean
+  ) => Promise<void> | void;
 }
 
 type FilterType = "pending" | "encaixes" | "sent" | "approved" | "all";
@@ -48,8 +57,11 @@ export function TriageReviewQueue({
   availableDays = [],
   onGenerateProposal,
   onViewProposal,
+  onDirectApprove,
 }: TriageReviewQueueProps) {
   const [selectedSubForProposal, setSelectedSubForProposal] =
+    useState<TriageSubmission | null>(null);
+  const [approvingSubmission, setApprovingSubmission] =
     useState<TriageSubmission | null>(null);
 
   // Filtro padrão: ATIVO por padrão apenas as que estão aguardando uma resposta ("pending")
@@ -429,17 +441,29 @@ export function TriageReviewQueue({
                         </span>
                       )}
 
-                      {/* Botão de Montar Proposta / Ver Proposta */}
+                      {/* Botão de Montar Proposta / Aprovar Diretamente / Ver Proposta */}
                       {isPending ? (
-                        <button
-                          type="button"
-                          data-tutorial="triage-proposal-btn"
-                          onClick={() => setSelectedSubForProposal(sub)}
-                          className="px-3.5 py-1.5 text-xs font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 flex items-center space-x-1 transition-all active:scale-95"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Montar Proposta</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {onDirectApprove && (
+                            <button
+                              type="button"
+                              onClick={() => setApprovingSubmission(sub)}
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs flex items-center space-x-1 transition-all active:scale-95"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Aprovar Diretamente</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            data-tutorial="triage-proposal-btn"
+                            onClick={() => setSelectedSubForProposal(sub)}
+                            className="px-3.5 py-1.5 text-xs font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 flex items-center space-x-1 transition-all active:scale-95"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Montar Proposta</span>
+                          </button>
+                        </div>
                       ) : linkedProposalId ? (
                         <button
                           type="button"
@@ -634,6 +658,162 @@ export function TriageReviewQueue({
           onClose={() => setSelectedSubForProposal(null)}
         />
       )}
+
+      {/* Modal de Aprovação Direta de Triagem (R10.1) */}
+      {approvingSubmission && onDirectApprove && (
+        <DirectApproveModal
+          submission={approvingSubmission}
+          services={services}
+          onConfirm={async (date, time, price, openWA) => {
+            await onDirectApprove(approvingSubmission, date, time, price, openWA);
+            setApprovingSubmission(null);
+          }}
+          onClose={() => setApprovingSubmission(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface DirectApproveModalProps {
+  submission: TriageSubmission;
+  services: ServiceItem[];
+  onConfirm: (date: string, time: string, price: number, openWhatsApp: boolean) => Promise<void> | void;
+  onClose: () => void;
+}
+
+function DirectApproveModal({ submission, services, onConfirm, onClose }: DirectApproveModalProps) {
+  const matchedService = services.find((s) => s.id === submission.serviceId) || services[0];
+
+  const getInitialDate = () => {
+    if (submission.preferredDate && /^\d{4}-\d{2}-\d{2}$/.test(submission.preferredDate)) {
+      return submission.preferredDate;
+    }
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const getInitialTime = () => {
+    if (submission.preferredTimeSlot) {
+      const match = submission.preferredTimeSlot.match(/\b\d{2}:\d{2}\b/);
+      if (match) return match[0];
+    }
+    return "09:00";
+  };
+
+  const [date, setDate] = useState(getInitialDate);
+  const [time, setTime] = useState(getInitialTime);
+  const [price, setPrice] = useState<number>(
+    matchedService?.promotionalPrice || matchedService?.price || 150
+  );
+  const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await onConfirm(date, time, Number(price), sendWhatsApp);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+      <div className="bg-white rounded-t-[28px] sm:rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E7DCCE] animate-slide-up-sheet space-y-4">
+        <div className="flex items-center justify-between border-b border-[#E7DCCE]/60 pb-3">
+          <div>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 block">
+              Aprovação Direta • Sem Proposta
+            </span>
+            <h3 className="text-lg font-bold text-[#2D1914]">Agendar Atendimento</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-[#E7DCCE] text-xs space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-[#2D1914] text-sm">{submission.clientName}</span>
+            <span className="text-stone-500 font-mono">{submission.clientPhone}</span>
+          </div>
+          <p className="text-stone-600">
+            Procedimento: <strong>{matchedService?.title || submission.serviceTitle}</strong>
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-[#2D1914] mb-1">Data *</label>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-[#E7DCCE] outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#2D1914] mb-1">Horário de Início *</label>
+              <input
+                type="time"
+                required
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-[#E7DCCE] outline-none font-mono"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#2D1914] mb-1">Valor do Procedimento (R$) *</label>
+            <input
+              type="number"
+              step="any"
+              required
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
+              className="w-full p-2.5 rounded-xl border border-[#E7DCCE] outline-none font-mono"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-950 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendWhatsApp}
+              onChange={(e) => setSendWhatsApp(e.target.checked)}
+              className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+            />
+            <span>Abrir WhatsApp com a mensagem padrão de confirmação</span>
+          </label>
+
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#E7DCCE]/60">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-50"
+            >
+              {isSubmitting ? "Aprovando..." : "Confirmar Aprovação & Agendar"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

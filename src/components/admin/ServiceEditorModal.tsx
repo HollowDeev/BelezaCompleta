@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { ServiceItem, ServiceStep } from "@/types/service";
+import { ServiceItem, ServiceStep, ServicePriceType } from "@/types/service";
 import { TriageForm } from "@/types/triage";
 import { UserProfile } from "@/types/salon";
 import { formatBRL } from "@/lib/utils";
@@ -65,8 +65,14 @@ export function ServiceEditorModal({
     "transformacao" | "mechas" | "corte" | "tratamento" | "outros"
   >(service?.category || "mechas");
   const [description, setDescription] = useState(service?.description || "");
+  const [priceType, setPriceType] = useState<ServicePriceType>(
+    service?.priceType || "fixed"
+  );
   const [price, setPrice] = useState<string>(
     service?.price !== undefined ? String(service.price) : "250"
+  );
+  const [maxPrice, setMaxPrice] = useState<string>(
+    service?.maxPrice !== undefined && service.maxPrice !== null ? String(service.maxPrice) : ""
   );
   const [promotionalPrice, setPromotionalPrice] = useState<string>(
     service?.promotionalPrice ? String(service.promotionalPrice) : ""
@@ -133,12 +139,12 @@ export function ServiceEditorModal({
   };
 
   // Estados das Etapas do Procedimento
-  const [steps, setSteps] = useState<ServiceStep[]>(
+  const [steps, setSteps] = useState<ServiceStep[]>(() =>
     service?.steps && service.steps.length > 0
       ? service.steps
       : [
           {
-            id: `st-1-${Date.now()}`,
+            id: "st-1-default",
             order: 1,
             title: "Diagnóstico & Aplicação",
             type: "active",
@@ -146,7 +152,7 @@ export function ServiceEditorModal({
             requiresExclusiveAttention: true,
           },
           {
-            id: `st-2-${Date.now()}`,
+            id: "st-2-default",
             order: 2,
             title: "Pausa Química de Ação",
             type: "pause",
@@ -155,7 +161,7 @@ export function ServiceEditorModal({
             requiresExclusiveAttention: false,
           },
           {
-            id: `st-3-${Date.now()}`,
+            id: "st-3-default",
             order: 3,
             title: "Lavatório & Finalização",
             type: "active",
@@ -240,9 +246,43 @@ export function ServiceEditorModal({
 
     const numericPrice = Number(price);
     if (isNaN(numericPrice) || numericPrice <= 0) {
-      setErrorMsg("Informe um preço base válido maior que zero (R$).");
+      setErrorMsg(
+        priceType === "starting_at"
+          ? "Informe um valor inicial válido maior que zero (a partir de R$)."
+          : "Informe um preço fixo válido maior que zero (R$)."
+      );
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
+    }
+
+    let numericMaxPrice: number | undefined = undefined;
+    if (priceType === "starting_at" && maxPrice.trim()) {
+      numericMaxPrice = Number(maxPrice);
+      if (isNaN(numericMaxPrice) || numericMaxPrice <= 0) {
+        setErrorMsg("O valor máximo deve ser um número válido maior que zero (R$).");
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      if (numericMaxPrice < numericPrice) {
+        setErrorMsg("O valor máximo (R$) não pode ser menor do que o valor inicial (a partir de R$).");
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
+    let numericPromoPrice: number | undefined = undefined;
+    if (priceType === "fixed" && promotionalPrice.trim()) {
+      numericPromoPrice = Number(promotionalPrice);
+      if (isNaN(numericPromoPrice) || numericPromoPrice <= 0) {
+        setErrorMsg("O preço promocional deve ser um número válido maior que zero (R$).");
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      if (numericPromoPrice >= numericPrice) {
+        setErrorMsg("O preço promocional deve ser menor do que o preço fixo original.");
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
     }
 
     let finalImageUrl = imageUrl?.trim();
@@ -283,8 +323,10 @@ export function ServiceEditorModal({
         slug,
         category,
         description: description.trim(),
+        priceType,
         price: numericPrice,
-        promotionalPrice: promotionalPrice && Number(promotionalPrice) > 0 ? Number(promotionalPrice) : undefined,
+        maxPrice: priceType === "starting_at" ? numericMaxPrice : undefined,
+        promotionalPrice: priceType === "fixed" ? numericPromoPrice : undefined,
         imageUrl: finalImageUrl,
         requiresTriage,
         triageFormId: requiresTriage ? triageFormId || (triageForms[0]?.id ?? undefined) : undefined,
@@ -446,73 +488,245 @@ export function ServiceEditorModal({
                 </div>
               )}
 
-              {/* Preço Base com Atalhos Rápidos */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
+              {/* Seletor Segmentado de Modelo de Precificação */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-[#2D1914]">
-                    Preço Base (R$) *
+                    Modalidade de Preço *
                   </label>
-                  <span className="text-[10px] text-stone-400">Sugestões rápidas:</span>
-                </div>
-                <div className="relative mb-1.5">
-                  <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
-                    R$
+                  <span className="text-[11px] text-stone-500">
+                    {priceType === "fixed"
+                      ? "Valor único e fechado para o serviço"
+                      : "Faixa com valor mínimo ('a partir de R$')"}
                   </span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="1"
-                    placeholder="250"
-                    value={price}
-                    onChange={(e) => {
-                      setPrice(e.target.value);
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 p-1.5 bg-[#FAF7F2] rounded-2xl border border-[#E7DCCE]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPriceType("fixed");
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
-                  />
-                </div>
-                {/* Chips de valores rápidos no mobile */}
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                  {["80", "120", "180", "250", "380", "500"].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => {
-                        setPrice(val);
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 ${
-                        price === val
-                          ? "bg-[#2D1914] text-white border-[#2D1914] shadow-xs"
-                          : "bg-white text-stone-600 border-[#E7DCCE] hover:bg-[#FAF7F2]"
-                      }`}
-                    >
-                      R$ {val}
-                    </button>
-                  ))}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      priceType === "fixed"
+                        ? "bg-[#2D1914] text-white shadow-xs"
+                        : "text-[#5E372C] hover:text-[#2D1914] hover:bg-white/70"
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4 text-[#DBAE3B]" />
+                    <span>Preço Fixo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPriceType("starting_at");
+                      if (errorMsg) setErrorMsg(null);
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      priceType === "starting_at"
+                        ? "bg-[#AD841D] text-white shadow-xs"
+                        : "text-[#5E372C] hover:text-[#2D1914] hover:bg-white/70"
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-white" />
+                    <span>A partir de... (Faixa)</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Preço Promocional (Opcional) */}
-              <div>
-                <label className="block text-xs font-bold text-[#2D1914] mb-1">
-                  Preço Promocional (Opcional)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
-                    R$
-                  </span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="Deixe em branco se não houver"
-                    value={promotionalPrice}
-                    onChange={(e) => setPromotionalPrice(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
-                  />
-                </div>
-              </div>
+              {/* Campos Condicionais conforme Preço Fixo vs A partir de */}
+              {priceType === "fixed" ? (
+                <>
+                  {/* Preço Fixo Base */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#2D1914]">
+                        Preço Fixo (R$) *
+                      </label>
+                      <span className="text-[10px] text-stone-400">Sugestões rápidas:</span>
+                    </div>
+                    <div className="relative mb-1.5">
+                      <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="1"
+                        placeholder="250"
+                        value={price}
+                        onChange={(e) => {
+                          setPrice(e.target.value);
+                          if (errorMsg) setErrorMsg(null);
+                        }}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                      {["80", "120", "180", "250", "380", "500"].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            setPrice(val);
+                            if (errorMsg) setErrorMsg(null);
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 cursor-pointer ${
+                            price === val
+                              ? "bg-[#2D1914] text-white border-[#2D1914] shadow-xs"
+                              : "bg-white text-stone-600 border-[#E7DCCE] hover:bg-[#FAF7F2]"
+                          }`}
+                        >
+                          R$ {val}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preço Promocional Opcional */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#2D1914]">
+                        Preço Promocional (Opcional)
+                      </label>
+                      <span className="text-[10px] text-stone-400">Valor com desconto</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="Deixe em branco se não houver"
+                        value={promotionalPrice}
+                        onChange={(e) => {
+                          setPromotionalPrice(e.target.value);
+                          if (errorMsg) setErrorMsg(null);
+                        }}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
+                      />
+                    </div>
+                    <span className="text-[10px] text-stone-400 mt-1 block">
+                      Se informado, risca o valor original na vitrine.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Valor Inicial ("A partir de R$") */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#2D1914] flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-[#AD841D]" />
+                        <span>Valor Inicial (a partir de R$) *</span>
+                      </label>
+                      <span className="text-[10px] text-stone-400">Sugestões rápidas:</span>
+                    </div>
+                    <div className="relative mb-1.5">
+                      <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="1"
+                        placeholder="250"
+                        value={price}
+                        onChange={(e) => {
+                          setPrice(e.target.value);
+                          if (errorMsg) setErrorMsg(null);
+                        }}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                      {["120", "180", "250", "350", "480", "650"].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            setPrice(val);
+                            if (errorMsg) setErrorMsg(null);
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 cursor-pointer ${
+                            price === val
+                              ? "bg-[#AD841D] text-white border-[#AD841D] shadow-xs"
+                              : "bg-white text-stone-600 border-[#E7DCCE] hover:bg-[#FAF7F2]"
+                          }`}
+                        >
+                          R$ {val}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-stone-500 mt-1 block">
+                      Exibido no catálogo como: &quot;A partir de R$ {price || "..."}&quot;
+                    </span>
+                  </div>
+
+                  {/* Valor Máximo Opcional */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#2D1914]">
+                        Valor Máximo Estimado (R$) (Opcional)
+                      </label>
+                      <span className="text-[10px] text-stone-400">Teto da faixa</span>
+                    </div>
+                    <div className="relative mb-1.5">
+                      <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="1"
+                        placeholder="Ex: 450 (ou deixe em branco)"
+                        value={maxPrice}
+                        onChange={(e) => {
+                          setMaxPrice(e.target.value);
+                          if (errorMsg) setErrorMsg(null);
+                        }}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E7DCCE] text-sm font-semibold outline-none focus:border-[#AD841D] bg-[#FAF7F2]/50"
+                      />
+                    </div>
+                    {/* Chips de acréscimo proporcional rápido */}
+                    {Number(price) > 0 && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                        {[
+                          Math.round(Number(price) * 1.3),
+                          Math.round(Number(price) * 1.5),
+                          Math.round(Number(price) * 1.8),
+                          Math.round(Number(price) * 2.0),
+                        ].map((suggested) => (
+                          <button
+                            key={suggested}
+                            type="button"
+                            onClick={() => {
+                              setMaxPrice(String(suggested));
+                              if (errorMsg) setErrorMsg(null);
+                            }}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 cursor-pointer ${
+                              maxPrice === String(suggested)
+                                ? "bg-[#2D1914] text-white border-[#2D1914] shadow-xs"
+                                : "bg-white text-stone-600 border-[#E7DCCE] hover:bg-[#FAF7F2]"
+                            }`}
+                          >
+                            R$ {suggested}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <span className="text-[10px] text-stone-500 mt-1 block">
+                      {maxPrice && Number(maxPrice) >= Number(price)
+                        ? `Faixa final: A partir de R$ ${price} até R$ ${maxPrice}`
+                        : "Opcional. Se não informado, exibe apenas 'A partir de R$ X'."}
+                    </span>
+                  </div>
+                </>
+              )}
 
               {/* Requer Triagem */}
               <div className="flex flex-col justify-end">

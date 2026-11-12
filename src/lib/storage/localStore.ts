@@ -1,8 +1,8 @@
 import { SalonOrganization, UserProfile, DashboardMode } from "@/types/salon";
-import { ServiceItem, ServiceStep } from "@/types/service";
+import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
-import { Appointment } from "@/types/appointment";
+import { Appointment, AppointmentProcedureItem } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
 import {
   AvailableDay,
@@ -25,14 +25,26 @@ import {
 
 const STORAGE_KEY_PREFIX = "glaicy_agenda_v2_";
 
+function cloneDefault<T>(value: T): T {
+  if (value === undefined || value === null) return value;
+  if (typeof structuredClone === "function") {
+    try {
+      return structuredClone(value);
+    } catch {
+      // Fallback if non-serializable properties exist
+    }
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
 function getStorageItem<T>(key: string, defaultValue: T): T {
-  if (typeof window === "undefined") return defaultValue;
+  if (typeof window === "undefined") return cloneDefault(defaultValue);
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PREFIX + key);
-    return raw ? JSON.parse(raw) : defaultValue;
+    return raw ? JSON.parse(raw) : cloneDefault(defaultValue);
   } catch (err) {
     console.error(`Error reading ${key} from localStorage`, err);
-    return defaultValue;
+    return cloneDefault(defaultValue);
   }
 }
 
@@ -88,16 +100,25 @@ export class SalonStore {
 
   // Serviços
   static getServices(): ServiceItem[] {
-    return getStorageItem("services", initialServices);
+    const list = getStorageItem("services", initialServices);
+    return list.map((s) => ({
+      ...s,
+      priceType: s.priceType || "fixed",
+    }));
   }
 
   static saveService(service: ServiceItem): void {
     const list = this.getServices();
-    const index = list.findIndex((s) => s.id === service.id);
+    const normalized: ServiceItem = {
+      ...service,
+      priceType: service.priceType || "fixed",
+      maxPrice: service.priceType === "starting_at" ? service.maxPrice : undefined,
+    };
+    const index = list.findIndex((s) => s.id === normalized.id);
     if (index >= 0) {
-      list[index] = service;
+      list[index] = normalized;
     } else {
-      list.push(service);
+      list.push(normalized);
     }
     setStorageItem("services", list);
   }
@@ -177,6 +198,25 @@ export class SalonStore {
     setStorageItem("triage_submissions", list);
   }
 
+  static approveTriageDirectly(submissionId: string): { submission: TriageSubmission; appointment?: Appointment } | null {
+    const submissions = this.getTriageSubmissions();
+    const subIndex = submissions.findIndex((s) => s.id === submissionId);
+    if (subIndex === -1) return null;
+
+    const sub = submissions[subIndex];
+    sub.status = "approved";
+    setStorageItem("triage_submissions", submissions);
+
+    // Convert or create corresponding appointment
+    const appointments = this.getAppointments();
+    let apt = appointments.find((a) => a.triageSubmissionId === submissionId || a.id === sub.preReservationId);
+    if (apt) {
+      apt.status = "confirmed";
+      setStorageItem("appointments", appointments);
+    }
+    return { submission: sub, appointment: apt };
+  }
+
   // Modelos & Templates de Propostas
   static getProposalTemplates(): ProposalTemplate[] {
     return getStorageItem("proposal_templates", initialProposalTemplates);
@@ -218,6 +258,34 @@ export class SalonStore {
     setStorageItem("proposals", list);
   }
 
+  static getProposalsByClientPhone(phone: string): LuxuryProposal[] {
+    let cleanPhone = (phone || "").replace(/\D/g, "");
+    if (cleanPhone.startsWith("55") && cleanPhone.length > 11) {
+      cleanPhone = cleanPhone.slice(2);
+    }
+    if (!cleanPhone) return [];
+    const list = this.getProposals();
+    return list.filter((p) => {
+      let pPhone = (p.clientPhone || "").replace(/\D/g, "");
+      if (pPhone.startsWith("55") && pPhone.length > 11) {
+        pPhone = pPhone.slice(2);
+      }
+      return pPhone.includes(cleanPhone) || cleanPhone.includes(pPhone);
+    });
+  }
+
+  static recordProposalFirstView(proposalId: string): LuxuryProposal | null {
+    const proposals = this.getProposals();
+    const prop = proposals.find((p) => p.id === proposalId);
+    if (!prop) return null;
+    if (prop.firstViewedAt || (prop as any).first_viewed_at) return prop;
+    const now = new Date().toISOString();
+    prop.firstViewedAt = now;
+    (prop as any).first_viewed_at = now;
+    this.saveProposal(prop);
+    return prop;
+  }
+
   // Agendamentos
   static getAppointments(): Appointment[] {
     const today = (() => {
@@ -254,6 +322,22 @@ export class SalonStore {
     setStorageItem("appointments", list);
   }
 
+  static getAppointmentsByClientPhone(phone: string): Appointment[] {
+    let cleanPhone = (phone || "").replace(/\D/g, "");
+    if (cleanPhone.startsWith("55") && cleanPhone.length > 11) {
+      cleanPhone = cleanPhone.slice(2);
+    }
+    if (!cleanPhone) return [];
+    const list = this.getAppointments();
+    return list.filter((a) => {
+      let aPhone = (a.clientPhone || "").replace(/\D/g, "");
+      if (aPhone.startsWith("55") && aPhone.length > 11) {
+        aPhone = aPhone.slice(2);
+      }
+      return aPhone.includes(cleanPhone) || cleanPhone.includes(aPhone);
+    });
+  }
+
   /**
    * Aprovação de proposta pela cliente:
    * Atualiza status da proposta para 'approved' e confirma a pré-reserva na agenda!
@@ -286,8 +370,28 @@ export class SalonStore {
     }
     setStorageItem("proposals", proposals);
 
-    const finalDate = options?.chosenDate || prop.schedulingDetails?.confirmedDate || prop.schedulingDetails?.suggestedDateStart;
-    const finalTime = options?.chosenTime || prop.schedulingDetails?.confirmedTime || prop.schedulingDetails?.suggestedTime || "09:00";
+    const finalDate =
+      options?.chosenDate ||
+      prop.schedulingDetails?.confirmedDate ||
+      prop.schedulingDetails?.clientChosenDate ||
+      prop.schedulingDetails?.suggestedDateStart ||
+      prop.schedulingDetails?.originalDate;
+    const finalTime =
+      options?.chosenTime ||
+      prop.schedulingDetails?.confirmedTime ||
+      prop.schedulingDetails?.clientChosenTime ||
+      prop.schedulingDetails?.suggestedTime ||
+      prop.schedulingDetails?.originalTime ||
+      "09:00";
+
+    const procedures: AppointmentProcedureItem[] = (prop.items || []).map((i) => ({
+      id: i.id,
+      serviceId: "22222222-2222-4222-8222-222222222221",
+      title: i.serviceTitle,
+      durationMin: i.durationMin || 60,
+      price: i.specialPrice ?? i.originalPrice ?? 0,
+      isIncluded: Boolean(i.isIncluded ?? true),
+    }));
 
     // Atualiza agendamento correspondente
     const appointments = this.getAppointments();
@@ -301,8 +405,14 @@ export class SalonStore {
       appointments[aptIndex].status = "confirmed";
       appointments[aptIndex].paymentStatus = "paid";
       appointments[aptIndex].proposalId = proposalId;
+      appointments[aptIndex].isUncommittedQuote = false;
       if (finalDate) appointments[aptIndex].date = finalDate;
       if (finalTime) appointments[aptIndex].startTime = finalTime;
+      if (procedures.length > 0) {
+        appointments[aptIndex].procedures = procedures;
+        appointments[aptIndex].serviceTitle =
+          prop.items?.[0]?.serviceTitle || prop.subtitle || prop.title || appointments[aptIndex].serviceTitle;
+      }
       updatedApt = appointments[aptIndex];
       setStorageItem("appointments", appointments);
     } else if (finalDate && finalTime) {
@@ -343,8 +453,9 @@ export class SalonStore {
         orgId: prop.orgId,
         professionalId: prop.professionalId,
         professionalName: "Gleicy Ronha",
-        serviceId: "srv-custom",
-        serviceTitle: prop.items?.[0]?.serviceTitle || prop.subtitle || "Procedimento Personalizado",
+        serviceId: "22222222-2222-4222-8222-222222222221",
+        serviceTitle: prop.items?.[0]?.serviceTitle || prop.subtitle || prop.title || "Procedimento Personalizado",
+        procedures,
         clientName: prop.clientName,
         clientPhone: prop.clientPhone,
         clientEmail: prop.clientEmail,
@@ -353,6 +464,7 @@ export class SalonStore {
         endTime: computedEndTime,
         totalDurationMin: totalDurationMin,
         status: "confirmed",
+        isUncommittedQuote: false,
         stepBlocks,
         price: prop.totalWithDiscount || prop.pixTotal,
         paymentStatus: "paid",
