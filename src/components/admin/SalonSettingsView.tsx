@@ -577,7 +577,7 @@ export function SalonSettingsView({
           ABA 3: MENSAGENS PADRÃO DE CONFIRMAÇÃO WHATSAPP (R5.1, R5.2)
           ======================================================== */}
       {activeSubTab === "mensagens" && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6 animate-fade-in">
+        <div data-tutorial="settings-whatsapp-template" className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6 animate-fade-in">
           <div className="border-b border-[#E7DCCE]/60 pb-4">
             <h2 className="font-editorial text-xl font-bold text-[#2D1914] flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-[#C7A03A]" />

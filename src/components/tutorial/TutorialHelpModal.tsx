@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { MODULE_GUIDES } from "./tutorialSteps";
+import { MODULE_GUIDES, UPDATE_RELEASE_FEATURES } from "./tutorialSteps";
 import {
   X,
   BookOpen,
@@ -19,6 +19,12 @@ import {
   HelpCircle,
   Play,
   RotateCcw,
+  Tag,
+  Bell,
+  MessageCircle,
+  FileText,
+  CheckSquare,
+  Clock,
 } from "lucide-react";
 
 interface TutorialHelpModalProps {
@@ -34,7 +40,7 @@ export function TutorialHelpModal({
 }: TutorialHelpModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedModuleId, setSelectedModuleId] = useState<string>(MODULE_GUIDES[0].id);
-  const [activeTab, setActiveTab] = useState<"modulos" | "atalhos" | "faq">("modulos");
+  const [activeTab, setActiveTab] = useState<"novidades" | "modulos" | "atalhos" | "faq">("novidades");
 
   const filteredGuides = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -116,6 +122,18 @@ export function TutorialHelpModal({
           {/* Tabs */}
           <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 w-full sm:w-auto shrink-0">
             <button
+              onClick={() => setActiveTab("novidades")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
+                activeTab === "novidades"
+                  ? "bg-[#1D3D3C] text-white shadow-xs border border-[#C7A03A]/50"
+                  : "text-[#80611F] bg-[#FCF9F0] hover:bg-[#F5ECCF] border border-[#C7A03A]/40"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
+              <span>Novidades da Atualização ✨</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab("modulos")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 ${
                 activeTab === "modulos"
@@ -167,6 +185,82 @@ export function TutorialHelpModal({
 
         {/* Conteúdo da Tab */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {activeTab === "novidades" && (
+            <div className="space-y-6 max-w-4xl mx-auto py-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#1D3D3C] to-[#254d4c] text-white shadow-md">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2 text-[#F0C961] text-xs font-bold uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4" />
+                    <span>Atualização 2.0 Concluída</span>
+                  </div>
+                  <h3 className="font-editorial text-xl sm:text-2xl font-bold text-white">
+                    10 Melhorias e Novas Ferramentas no seu Painel
+                  </h3>
+                  <p className="text-xs text-stone-300 max-w-xl">
+                    Todas as novas funções solicitadas foram integradas e testadas para facilitar seu atendimento diário.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    onClose();
+                    onStartInteractiveTour();
+                  }}
+                  className="px-4 py-2.5 rounded-xl font-bold text-xs text-[#2D1914] bg-[#DBAE3B] hover:bg-[#F0C961] transition-all shadow-md flex items-center justify-center space-x-2 shrink-0 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Ver na Tela (Tour)</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {UPDATE_RELEASE_FEATURES.filter(
+                  (f) =>
+                    !searchQuery ||
+                    f.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    f.whatChanged.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    f.tag.toLowerCase().includes(searchQuery.toLowerCase())
+                ).map((feature) => (
+                  <div
+                    key={feature.id}
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E7DCCE] shadow-xs flex flex-col justify-between space-y-3.5 hover:border-[#C7A03A]/60 transition-colors"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#80611F] bg-[#FCF9F0] border border-[#C7A03A]/40 px-2.5 py-0.5 rounded-full">
+                          {feature.number}. {feature.tag}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm sm:text-base text-[#2D1914] leading-snug">
+                        {feature.title}
+                      </h4>
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        {feature.whatChanged}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-[#E7DCCE]/60">
+                      <div className="text-[11px] font-bold text-[#1D3D3C] uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Como usar:</span>
+                      </div>
+                      <ul className="space-y-1 text-xs text-stone-600 list-disc pl-4">
+                        {feature.howToUse.slice(0, 2).map((step, idx) => (
+                          <li key={idx} className="leading-relaxed">{step}</li>
+                        ))}
+                      </ul>
+
+                      <div className="mt-2 p-2.5 rounded-xl bg-[#FCF9F0] border border-[#C7A03A]/30 text-[11px] text-[#5E372C] leading-snug">
+                        <span className="font-bold text-[#80611F]">💡 Dica: </span>
+                        {feature.goldenTip}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === "modulos" && (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6">
               {/* Menu Lateral de Módulos (Carrossel Horizontal no Mobile, Barra Lateral no Desktop) */}

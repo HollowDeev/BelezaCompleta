@@ -376,7 +376,7 @@ export function NewAppointmentModal({
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-4 space-y-5 text-xs no-scrollbar sm:scrollbar-thin">
             {/* SEÇÃO 1: CONSTRUTOR DE MÚLTIPLOS PROCEDIMENTOS (R8) */}
-            <div className="p-4 rounded-2xl bg-[#FFFDF9] border border-[#C59B27]/40 space-y-3.5">
+            <div data-tutorial="appointment-procedures-builder" className="p-4 rounded-2xl bg-[#FFFDF9] border border-[#C59B27]/40 space-y-3.5">
               <div className="flex items-center justify-between border-b border-[#E7DCCE]/70 pb-2.5">
                 <div className="flex items-center gap-2">
                   <Scissors className="w-4 h-4 text-[#C59B27]" />

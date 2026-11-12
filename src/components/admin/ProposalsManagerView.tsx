@@ -91,6 +91,7 @@ export function ProposalsManagerView({
           {/* Botão de Criação de Proposta Manual */}
           {onCreateManualProposal && (
             <button
+              data-tutorial="proposals-new-manual-btn"
               onClick={onCreateManualProposal}
               className="px-4 py-2 bg-[#1D3D3C] hover:bg-[#152e2d] text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm border border-[#C7A03A]/50 shrink-0 cursor-pointer"
             >

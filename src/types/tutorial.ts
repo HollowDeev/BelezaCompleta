@@ -11,7 +11,8 @@ export type TutorialCategory =
   | "SERVICOS"
   | "MODELOS_TRIAGEM"
   | "CONFIGURACOES"
-  | "ATALHOS";
+  | "ATALHOS"
+  | "NOVIDADES";
 
 export interface TutorialStep {
   id: string;
@@ -33,4 +34,17 @@ export interface ModuleGuide {
   keyPoints: { label: string; text: string }[];
   stepByStep: string[];
   rulesOfThumb: string[];
+}
+
+export interface UpdateReleaseFeature {
+  id: string;
+  number: number;
+  tag: string;
+  title: string;
+  shortSummary: string;
+  iconName: string;
+  targetTab?: string;
+  whatChanged: string;
+  howToUse: string[];
+  goldenTip: string;
 }

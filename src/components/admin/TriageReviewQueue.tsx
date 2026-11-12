@@ -447,6 +447,7 @@ export function TriageReviewQueue({
                           {onDirectApprove && (
                             <button
                               type="button"
+                              data-tutorial="triage-approve-directly-btn"
                               onClick={() => setApprovingSubmission(sub)}
                               className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs flex items-center space-x-1 transition-all active:scale-95"
                             >

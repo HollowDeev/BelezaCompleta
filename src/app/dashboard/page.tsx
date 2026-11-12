@@ -26,7 +26,8 @@ import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { InteractiveTutorialTour } from "@/components/tutorial/InteractiveTutorialTour";
 import { TutorialHelpModal } from "@/components/tutorial/TutorialHelpModal";
-import { TUTORIAL_STEPS } from "@/components/tutorial/tutorialSteps";
+import { TUTORIAL_STEPS, UPDATE_TUTORIAL_STEPS } from "@/components/tutorial/tutorialSteps";
+import { UpdateReleaseTutorialModal } from "@/components/tutorial/UpdateReleaseTutorialModal";
 
 import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
@@ -106,16 +107,31 @@ export default function DashboardPage() {
   const [isCreatingManualProposal, setIsCreatingManualProposal] = useState<boolean>(false);
   const [viewingProposalModal, setViewingProposalModal] = useState<LuxuryProposal | null>(null);
 
-  // Estados do Algoritmo de Ensino (Tutorial Interativo & Central)
+  // Estados do Algoritmo de Ensino (Tutorial Interativo, Novidades da Atualização & Central)
   const [isTutorialTourOpen, setIsTutorialTourOpen] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
   const [isTutorialHelpModalOpen, setIsTutorialHelpModalOpen] = useState(false);
+  const [isUpdateTutorialOpen, setIsUpdateTutorialOpen] = useState(false);
+  const [isUpdateTourActive, setIsUpdateTourActive] = useState(false);
 
-  // Disparo automático do Tutorial no primeiro acesso
+  // Disparo automático do Tutorial de Novidades no próximo acesso pós-atualização
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return;
+    const hasSeenUpdate = localStorage.getItem("glaicy_update_tutorial_v2_seen");
+    if (!hasSeenUpdate) {
+      const timer = setTimeout(() => {
+        setIsUpdateTutorialOpen(true);
+      }, 900);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading]);
+
+  // Disparo automático do Tutorial inicial caso seja primeiro acesso absoluto
   useEffect(() => {
     if (typeof window === "undefined" || authLoading) return;
     const hasSeenTutorial = localStorage.getItem("glaicy_tutorial_dashboard_seen");
-    if (!hasSeenTutorial) {
+    const hasSeenUpdate = localStorage.getItem("glaicy_update_tutorial_v2_seen");
+    if (!hasSeenTutorial && hasSeenUpdate) {
       const timer = setTimeout(() => {
         setIsTutorialTourOpen(true);
         setTutorialStepIndex(0);
@@ -124,21 +140,46 @@ export default function DashboardPage() {
     }
   }, [authLoading]);
 
+  const handleCloseUpdateTutorial = () => {
+    setIsUpdateTutorialOpen(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("glaicy_update_tutorial_v2_seen", "true");
+    }
+  };
+
+  const handleStartUpdateTour = () => {
+    setIsUpdateTutorialOpen(false);
+    setIsUpdateTourActive(true);
+    setTutorialStepIndex(0);
+    setIsTutorialTourOpen(true);
+  };
+
   const handleCompleteTutorialTour = () => {
     setIsTutorialTourOpen(false);
     if (typeof window !== "undefined") {
-      localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+      if (isUpdateTourActive) {
+        localStorage.setItem("glaicy_update_tutorial_v2_seen", "true");
+        setIsUpdateTourActive(false);
+      } else {
+        localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+      }
     }
   };
 
   const handleSkipTutorialTour = () => {
     setIsTutorialTourOpen(false);
     if (typeof window !== "undefined") {
-      localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+      if (isUpdateTourActive) {
+        localStorage.setItem("glaicy_update_tutorial_v2_seen", "true");
+        setIsUpdateTourActive(false);
+      } else {
+        localStorage.setItem("glaicy_tutorial_dashboard_seen", "true");
+      }
     }
   };
 
   const handleStartTourFromBeginning = () => {
+    setIsUpdateTourActive(false);
     setTutorialStepIndex(0);
     setIsTutorialTourOpen(true);
   };
@@ -664,10 +705,26 @@ export default function DashboardPage() {
               <span className="hidden sm:inline">Sincronizado</span>
             </div>
 
+            {/* Botão de Novidades da Atualização */}
+            <button
+              data-tutorial="header-update-news"
+              onClick={() => setIsUpdateTutorialOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#1D3D3C] to-[#254d4c] hover:from-[#152e2d] hover:to-[#1D3D3C] text-white border border-[#C7A03A]/60 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-2xs group relative cursor-pointer"
+              title="Aprender tudo que mudou nesta nova atualização (10 Novidades)"
+            >
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F0C961] animate-pulse shrink-0" />
+              <span className="hidden md:inline">Novidades da Atualização</span>
+              <span className="md:hidden">Novidades</span>
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E5C158] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#C59B27]"></span>
+              </span>
+            </button>
+
             {/* Botão de Tutorial & Guia do Sistema */}
             <button
               onClick={() => setIsTutorialHelpModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-[#FCF9F0] hover:bg-[#F5ECCF] text-[#80611F] border border-[#C7A03A]/50 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-2xs group"
+              className="px-3 py-2 rounded-xl bg-[#FCF9F0] hover:bg-[#F5ECCF] text-[#80611F] border border-[#C7A03A]/50 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-2xs group cursor-pointer"
               title="Abrir Tutorial e Guia Completo do Sistema"
             >
               <GraduationCap className="w-4 h-4 text-[#C7A03A] group-hover:scale-110 transition-transform" />
@@ -1098,10 +1155,17 @@ export default function DashboardPage() {
 
       {/* Motor de Tour Guiado Interativo (Holofote) */}
       <InteractiveTutorialTour
-        steps={TUTORIAL_STEPS}
+        steps={isUpdateTourActive ? UPDATE_TUTORIAL_STEPS : TUTORIAL_STEPS}
         currentStepIndex={tutorialStepIndex}
         isOpen={isTutorialTourOpen}
-        onNext={() => setTutorialStepIndex((prev) => Math.min(prev + 1, TUTORIAL_STEPS.length - 1))}
+        onNext={() =>
+          setTutorialStepIndex((prev) =>
+            Math.min(
+              prev + 1,
+              (isUpdateTourActive ? UPDATE_TUTORIAL_STEPS.length : TUTORIAL_STEPS.length) - 1
+            )
+          )
+        }
         onPrev={() => setTutorialStepIndex((prev) => Math.max(prev - 1, 0))}
         onSkip={handleSkipTutorialTour}
         onComplete={handleCompleteTutorialTour}
@@ -1113,6 +1177,14 @@ export default function DashboardPage() {
         isOpen={isTutorialHelpModalOpen}
         onClose={() => setIsTutorialHelpModalOpen(false)}
         onStartInteractiveTour={handleStartTourFromBeginning}
+      />
+
+      {/* Modal Dedicado das 10 Novidades da Atualização 2.0 */}
+      <UpdateReleaseTutorialModal
+        isOpen={isUpdateTutorialOpen}
+        onClose={handleCloseUpdateTutorial}
+        onStartInteractiveTour={handleStartUpdateTour}
+        onNavigateToTab={(tab) => handleSelectTab(tab as AdminTab)}
       />
     </div>
   );

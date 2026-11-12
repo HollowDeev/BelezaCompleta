@@ -1,4 +1,4 @@
-import { TutorialStep, ModuleGuide } from "@/types/tutorial";
+import { TutorialStep, ModuleGuide, UpdateReleaseFeature } from "@/types/tutorial";
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -630,5 +630,300 @@ export const MODULE_GUIDES: ModuleGuide[] = [
       "Mantenha o telefone de WhatsApp sempre atualizado para receber os alertas e mensagens de clientes.",
       "Revise sua meta diária todo início de mês para acompanhar o crescimento do salão.",
     ],
+  },
+];
+
+// ========================================================
+// GUIA COMPLETO DAS 10 NOVIDADES DA ATUALIZAÇÃO 2.0 (R1–R10)
+// ========================================================
+export const UPDATE_RELEASE_FEATURES: UpdateReleaseFeature[] = [
+  {
+    id: "update-services-pricing",
+    number: 1,
+    tag: "Serviços & Catálogo",
+    title: "Preço Fixo ou Faixa ('A partir de...')",
+    shortSummary: "Cadastre serviços com valor fixo ou faixa flexível de preço para procedimentos sob medida.",
+    iconName: "Tag",
+    targetTab: "servicos",
+    whatChanged:
+      "Agora você pode cadastrar e editar serviços definindo se o preço é Fixo (ex: R$ 180,00) ou uma Faixa ('A partir de R$ 350,00 até R$ 600,00'). Todos os seus serviços cadastrados anteriormente foram mantidos como preço fixo e podem ser alterados a qualquer momento.",
+    howToUse: [
+      "No menu lateral, clique na aba 'Serviços' e depois em 'Editar' em qualquer serviço ou no botão '+ Novo Serviço'.",
+      "No campo 'Modalidade de Preço', alterne entre 'Preço Fixo' e 'A partir de... (Faixa)'.",
+      "Informe o valor inicial obrigatório e, se desejar, defina também o valor máximo da faixa.",
+      "Salve as alterações. No catálogo público da cliente, o serviço será exibido com 'A partir de R$ X' de forma elegante e transparente.",
+    ],
+    goldenTip:
+      "Para Mechas, Iluminados e Tratamentos Capilares onde a quantidade de produto varia com o comprimento do cabelo, use 'A partir de...'. Isso alinha expectativas antes da avaliação presencial.",
+  },
+  {
+    id: "update-multi-services",
+    number: 2,
+    tag: "Experiência da Cliente",
+    title: "'Montar o meu atendimento' (Múltiplos Procedimentos)",
+    shortSummary: "Sua cliente agora pode escolher 2 ou mais procedimentos juntos no site em um único agendamento.",
+    iconName: "Sparkles",
+    targetTab: "agenda",
+    whatChanged:
+      "Adicionamos no catálogo público o recurso 'Montar o meu atendimento'. A cliente consegue marcar simultaneamente mechas, corte, tratamento ou escova. O sistema soma os valores, calcula a duração combinada e encadeia as etapas técnicas respeitando as pausas químicas.",
+    howToUse: [
+      "Ao acessar a página inicial do salão, a cliente visualiza o botão dourado '✨ Montar o meu atendimento'.",
+      "Ela seleciona todos os procedimentos desejados com um clique e confere o tempo total e investimento estimado.",
+      "Ao avançar, o sistema solicita uma única triagem ou oferece as datas com slots suficientes na sua grade.",
+      "No seu painel, o agendamento surge consolidado com todos os procedimentos listados na ficha técnica.",
+    ],
+    goldenTip:
+      "Se a cliente montar Mechas + Corte, o motor do salão aproveita o intervalo de ação da química para o corte ou o posiciona logo após, otimizando sua tarde sem atrasos.",
+  },
+  {
+    id: "update-accordions-view",
+    number: 3,
+    tag: "Agenda & Calendário",
+    title: "Edição em Todas as Visões & Nova Visão em Accordions",
+    shortSummary: "Edite agendamentos no Mês, Semana e Dia e veja todos os serviços em accordions ordenados por data.",
+    iconName: "Calendar",
+    targetTab: "agenda",
+    whatChanged:
+      "Agora você pode clicar e editar qualquer agendamento existente diretamente nas visões Mensal, Semanal e Diária. Além disso, criamos a 4ª visualização master: 'Accordions', que agrupa todos os seus atendimentos dia a dia em sanfonas expansíveis com resumo de faturamento e clientes.",
+    howToUse: [
+      "Acesse a aba 'Agenda & Calendário'.",
+      "Alterne entre as 4 visualizações no topo: 'Visão Mensal', 'Semanal', 'Diária' e o novo botão 'Accordions'.",
+      "Na visão em Accordions, cada data exibe a quantidade de atendimentos e o faturamento total daquele dia no cabeçalho.",
+      "Em qualquer visualização, clique no botão de edição (ícone de lápis) sobre qualquer atendimento para alterar horários, procedimentos ou cliente.",
+    ],
+    goldenTip:
+      "Use a visão em Accordions no início da semana para ter um raio-x completo e sequencial de tudo que vai entrar no caixa nos próximos dias.",
+  },
+  {
+    id: "update-untriaged-badge",
+    number: 4,
+    tag: "Operação & WhatsApp",
+    title: "Notificação Persistente de Serviços sem Triagem & WhatsApp",
+    shortSummary: "Badge numérico que não sai da tela até você confirmar e abrir a mensagem de WhatsApp da cliente.",
+    iconName: "Bell",
+    targetTab: "operacao",
+    whatChanged:
+      "Para serviços que não exigem triagem prévia (como corte ou escova), o sistema agora exibe um badge numérico pulsante e persistente na barra lateral e um card destacado no topo da tela 'Operação do Dia'. O badge não desaparece até que você clique em confirmar.",
+    howToUse: [
+      "Quando uma cliente agendar direto, um alerta sonoro e um badge âmbar surgirão no menu 'Operação'.",
+      "No topo da Operação do Dia, confira o card 'Confirmação Necessária • Agendamento sem Triagem'.",
+      "Clique no botão 'Confirmar e Abrir WhatsApp'.",
+      "O sistema consolida a vaga na sua grade e abre automaticamente o WhatsApp Web (ou app) com a mensagem oficial pré-formatada para a cliente.",
+    ],
+    goldenTip:
+      "Você não corre mais o risco de esquecer de enviar a confirmação: enquanto você não clicar no botão verde de confirmação, o aviso continuará ativo lembrando você.",
+  },
+  {
+    id: "update-confirmation-template",
+    number: 5,
+    tag: "Configurações & Diretrizes",
+    title: "Mensagens Padrão de Confirmação & Política 24h / 50%",
+    shortSummary: "Personalize sua mensagem padrão de confirmação com a política oficial de cancelamento e retenção de crédito.",
+    iconName: "MessageCircle",
+    targetTab: "configuracoes",
+    whatChanged:
+      "Criamos uma nova aba em 'Configurações' para você cadastrar e personalizar os templates de mensagem de confirmação do WhatsApp. O sistema já vem carregado com o seu texto oficial de 24h de aviso e 50% retido como crédito para uso em até 15 dias.",
+    howToUse: [
+      "Acesse a aba 'Configurações' no menu lateral e clique na sub-aba 'Mensagem de Confirmação'.",
+      "Veja o Live Preview no celular virtual ao lado mostrando exatamente como a cliente receberá o texto.",
+      "Edite o texto livremente utilizando as variáveis dinâmicas como {cliente}, {servico}, {data} e {horario}.",
+      "Clique em 'Salvar Mensagem de Confirmação' ou use 'Restaurar Mensagem Padrão' para voltar ao texto oficial a qualquer momento.",
+    ],
+    goldenTip:
+      "A política de 24 horas formalizada protege seu faturamento contra faltas de última hora e garante que o valor retido seja aproveitado em até 15 dias pela cliente.",
+  },
+  {
+    id: "update-realtime-sync",
+    number: 6,
+    tag: "Alta Tecnologia",
+    title: "Sincronização em Tempo Real (Sem F5) & Efetivação do Agendamento",
+    shortSummary: "Aprovação de propostas pela cliente agora surge instantaneamente no seu painel com vaga confirmada.",
+    iconName: "Zap",
+    targetTab: "operacao",
+    whatChanged:
+      "Solucionamos o atraso na aprovação de propostas: agora, no mesmo milissegundo em que a cliente clica em 'Aprovar Proposta' no link do celular dela, o seu painel executivo atualiza automaticamente sem você precisar apertar F5, e o agendamento é gravado com status 'Confirmado'.",
+    howToUse: [
+      "Deixe seu painel aberto normalmente durante o dia.",
+      "Quando uma cliente aceitar um orçamento ou proposta comercial pelo WhatsApp, você ouvirá uma notificação sonora sutil.",
+      "O card da proposta migra para 'Aprovada' e o horário bloqueia na sua timeline imediatamente.",
+      "O indicador verde 'Sincronizado' no topo da tela garante que sua conexão Supabase Realtime via WebSockets está saudável.",
+    ],
+    goldenTip:
+      "Mesmo se você estiver com o navegador em outra aba ou no celular, a sincronização instantânea garante que duas pessoas nunca disputem o mesmo horário.",
+  },
+  {
+    id: "update-manual-proposals",
+    number: 7,
+    tag: "Propostas Comerciais",
+    title: "Propostas Manuais, Portal por Telefone & Rastreio de 1º Acesso",
+    shortSummary: "Crie propostas avulsas direto pelo painel, envie no WhatsApp e saiba quando a cliente abriu o link pela 1ª vez.",
+    iconName: "FileText",
+    targetTab: "propostas",
+    whatChanged:
+      "Você não depende mais de a cliente mandar uma triagem para gerar uma proposta: pode clicar em '+ Nova Proposta Manual' e montar propostas luxuosas do zero. Além disso, criamos o portal /meus-agendamentos (onde a cliente faz login apenas com o telefone) e um badge que mostra a data/hora exata em que ela abriu a proposta.",
+    howToUse: [
+      "Na aba 'Propostas Comerciais', clique no botão '+ Nova Proposta Manual'.",
+      "Informe o nome, WhatsApp da cliente, adicione os procedimentos e escolha a data.",
+      "Ao gerar, copie o link e mande para a cliente com as instruções de login por telefone.",
+      "Na lista de propostas, observe a etiqueta 'Visualizada em [data/hora]' que surge no instante em que a cliente abrir o link!",
+    ],
+    goldenTip:
+      "O selo de primeiro acesso permite você saber exatamente quando a cliente leu a proposta, ajudando você a puxar conversa no WhatsApp no momento ideal para fechar o atendimento.",
+  },
+  {
+    id: "update-multi-appointment-builder",
+    number: 8,
+    tag: "Agendamentos Diretos",
+    title: "Múltiplos Procedimentos e Valores Personalizados no Painel",
+    shortSummary: "Adicione vários procedimentos em um agendamento manual, edite valores e marque itens como avulsos.",
+    iconName: "CheckSquare",
+    targetTab: "agenda",
+    whatChanged:
+      "Ao clicar em '+ Novo Agendamento' no painel, você agora encontra o novo construtor de procedimentos: selecione múltiplos serviços, adicione procedimentos avulsos, defina a duração de cada um e alterne entre 'Cobrar no Total' ou '✓ Incluso / Avulso'.",
+    howToUse: [
+      "Clique em '+ Novo Agendamento' ou pressione a tecla 'N' no seu teclado.",
+      "Na seção 'Procedimentos do Atendimento', clique em '+ Adicionar Procedimento'.",
+      "Escolha do catálogo ou digite um procedimento personalizado com valor e duração.",
+      "Use o botão 'Cobrar no Total' vs '✓ Incluso / Avulso' se quiser bonificar um tratamento ou aplicar desconto manual no valor final.",
+    ],
+    goldenTip:
+      "Ao presentear a cliente com uma hidratação de cortesia, marque-a como '✓ Incluso / Avulso': ela aparecerá na ficha técnica e no histórico dela sem alterar o total a ser cobrado no caixa.",
+  },
+  {
+    id: "update-uncommitted-quotes",
+    number: 9,
+    tag: "Orçamentos",
+    title: "Criação de Orçamentos sem Compromisso (Sem Travar Horário)",
+    shortSummary: "Envie e registre orçamentos para clientes indecisas sem ocupar ou bloquear vagas na sua agenda.",
+    iconName: "Clock",
+    targetTab: "operacao",
+    whatChanged:
+      "Agora o sistema suporta 'Orçamentos sem Compromisso' (uncommitted_quote). A cliente (ou você) pode enviar uma solicitação com horário desejado para estimativa de preço, mas o motor de agendamento NÃO bloqueia o horário na sua agenda até que a proposta seja aprovada.",
+    howToUse: [
+      "No fluxo do site da cliente, ela pode optar por 'Solicitar Orçamento sem Bloquear Horário'.",
+      "No painel, orçamentos aparecem com tag específica, permitindo você analisar o perfil da cliente com calma.",
+      "O horário permanece 100% disponível para outra cliente que quiser agendar e confirmar de imediato.",
+      "Quando a cliente aprovar a proposta enviada, o sistema converte o orçamento em agendamento confirmado e bloqueia a grade.",
+    ],
+    goldenTip:
+      "Evita o problema clássico de salão onde uma cliente 'segura' o melhor horário de sábado para tirar dúvidas e depois desiste, tirando a vez de uma cliente pagante.",
+  },
+  {
+    id: "update-direct-triage-approval",
+    number: 10,
+    tag: "Triagens Rápidas",
+    title: "Aprovação Direta de Triagens (Sem Obrigação de Proposta)",
+    shortSummary: "Aprove e confirme pré-agendamentos na fila de triagem com um clique rápido quando a proposta não for necessária.",
+    iconName: "CheckCircle2",
+    targetTab: "triagens",
+    whatChanged:
+      "Você não é mais obrigada a elaborar uma proposta comercial para cada triagem recebida. Se a cliente já for conhecida ou o procedimento for simples e sem dúvidas, basta clicar no novo botão verde 'Aprovar Diretamente'.",
+    howToUse: [
+      "Acesse a aba 'Triagens Recebidas' no menu lateral.",
+      "Localize a triagem da cliente na lista de pendentes.",
+      "Ao lado do botão tradicional 'Montar Proposta', clique no novo botão 'Aprovar Diretamente'.",
+      "Confirme a ação: o agendamento é aprovado na hora, a vaga é consolidada na agenda e a pré-reserva é concluída com sucesso.",
+    ],
+    goldenTip:
+      "Economize tempo valioso: use 'Montar Proposta' apenas para grandes transformações e mechas complexas, e 'Aprovar Diretamente' para cortes, manutenções e clientes habituais.",
+  },
+];
+
+// ========================================================
+// TOUR INTERATIVO DAS NOVIDADES (COM HOLOFOTE NO DASHBOARD)
+// ========================================================
+export const UPDATE_TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: "update-tour-welcome",
+    category: "NOVIDADES",
+    categoryLabel: "Tour das Novidades",
+    title: "Conheça as Novidades da Atualização 2.0 ✨",
+    description:
+      "Preparamos um tour rápido e visual para mostrar exatamente onde ficam as 10 novas ferramentas no seu painel. Vamos dar uma olhada juntos?",
+    goldenTip: "Você pode avançar passo a passo ou fechar este tour a qualquer momento.",
+    position: "center",
+  },
+  {
+    id: "update-tour-untriaged",
+    category: "NOVIDADES",
+    categoryLabel: "Agendamentos sem Triagem",
+    title: "1. Fila de Agendamentos sem Triagem & WhatsApp",
+    description:
+      "Aqui na tela Operação do Dia, clientes que agendaram serviços sem triagem ficam em destaque permanente até você clicar em 'Confirmar e Abrir WhatsApp'.",
+    goldenTip: "O badge numérico no menu lateral permanece ativo para você nunca esquecer de enviar a confirmação.",
+    targetSelector: '[data-tutorial="pending-confirmations-box"], [data-tutorial="sidebar-operacao"]',
+    targetTab: "operacao",
+    position: "bottom",
+  },
+  {
+    id: "update-tour-accordions",
+    category: "NOVIDADES",
+    categoryLabel: "Agenda & Accordions",
+    title: "2. Nova Visão em Accordions & Edição Livre",
+    description:
+      "Aqui no calendário, o novo botão 'Accordions' agrupa todos os agendamentos por data com faturamento diário. Além disso, agora você pode editar qualquer agendamento em todas as visões!",
+    goldenTip: "Clique no ícone de lápis em qualquer card para alterar horários, valores ou procedimentos.",
+    targetSelector: '[data-tutorial="calendar-view-accordions"], [data-tutorial="calendar-controls"]',
+    targetTab: "agenda",
+    position: "bottom",
+  },
+  {
+    id: "update-tour-manual-proposal",
+    category: "NOVIDADES",
+    categoryLabel: "Propostas Manuais",
+    title: "3. Proposta Manual Direta & Rastreio de 1º Acesso",
+    description:
+      "Agora você pode clicar em '+ Nova Proposta Manual' para gerar propostas mesmo sem pré-agendamento no site, e ver exatamente quando a cliente abriu a proposta pelo badge de visualização.",
+    goldenTip: "Sua cliente também pode acessar o novo portal /meus-agendamentos logando apenas com o número de WhatsApp.",
+    targetSelector: '[data-tutorial="proposals-new-manual-btn"], [data-tutorial="sidebar-propostas"]',
+    targetTab: "propostas",
+    position: "bottom",
+  },
+  {
+    id: "update-tour-direct-triage",
+    category: "NOVIDADES",
+    categoryLabel: "Aprovação de Triagens",
+    title: "4. Aprovação Direta de Triagens com 1 Clique",
+    description:
+      "Na fila de triagens, você não precisa mais montar proposta para tudo: o novo botão 'Aprovar Diretamente' agenda a cliente imediatamente.",
+    goldenTip: "Ideal para cortes, retoques e clientes antigas que não precisam de orçamento detalhado.",
+    targetSelector: '[data-tutorial="triage-approve-directly-btn"], [data-tutorial="sidebar-triagens"]',
+    targetTab: "triagens",
+    position: "bottom",
+  },
+  {
+    id: "update-tour-services-pricing",
+    category: "NOVIDADES",
+    categoryLabel: "Serviços & Preços",
+    title: "5. Preço Fixo ou Faixa ('A partir de...')",
+    description:
+      "No cadastro de serviços, você agora escolhe entre Preço Fixo ou Faixa ('A partir de R$ X até R$ Y'). Todos os serviços antigos continuam fixos e editáveis.",
+    goldenTip: "No site, suas clientes também contam com a opção 'Montar o meu atendimento' para escolher múltiplos serviços juntos.",
+    targetSelector: '[data-tutorial="sidebar-servicos"]',
+    targetTab: "servicos",
+    position: "right",
+  },
+  {
+    id: "update-tour-settings-whatsapp",
+    category: "NOVIDADES",
+    categoryLabel: "Mensagem Padrão 24h",
+    title: "6. Mensagem de Confirmação Configurável",
+    description:
+      "Nas Configurações, você pode personalizar a mensagem do WhatsApp enviada às clientes, já inicializada com a política de 24h e 50% de retenção de crédito.",
+    goldenTip: "Veja o Live Preview no celular ao lado para conferir como o texto fica no WhatsApp.",
+    targetSelector: '[data-tutorial="settings-whatsapp-template"], [data-tutorial="sidebar-configuracoes"]',
+    targetTab: "configuracoes",
+    position: "top",
+  },
+  {
+    id: "update-tour-realtime-status",
+    category: "NOVIDADES",
+    categoryLabel: "Realtime Instantâneo",
+    title: "7. Sincronização em Tempo Real (Sem F5)",
+    description:
+      "Quando uma cliente aprova uma proposta ou envia um agendamento, sua tela atualiza no mesmo instante via WebSocket sem precisar recarregar!",
+    goldenTip: "O pontinho verde 'Sincronizado' no topo confirma que sua agenda está conectada e viva em tempo real.",
+    targetSelector: '[data-tutorial="header-status"]',
+    position: "bottom",
   },
 ];

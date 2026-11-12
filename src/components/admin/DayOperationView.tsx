@@ -227,7 +227,7 @@ export function DayOperationView({
 
       {/* 2. ALERTA DE AGENDAMENTOS DIRETOS PENDENTES DE CONFIRMAÇÃO (R4.1, R4.2) */}
       {pendingConfirmations.length > 0 && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-[#C7A03A]/60 shadow-xs flex flex-col space-y-3">
+        <div data-tutorial="pending-confirmations-box" className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-[#C7A03A]/60 shadow-xs flex flex-col space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-start space-x-3">
               <div className="w-10 h-10 rounded-2xl bg-[#FCF9F0] border border-[#C7A03A]/60 text-[#80611F] flex items-center justify-center shrink-0">

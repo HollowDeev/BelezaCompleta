@@ -501,7 +501,7 @@ export function ServiceEditorModal({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 p-1.5 bg-[#FAF7F2] rounded-2xl border border-[#E7DCCE]">
+                <div data-tutorial="service-price-type-toggle" className="grid grid-cols-2 gap-2 p-1.5 bg-[#FAF7F2] rounded-2xl border border-[#E7DCCE]">
                   <button
                     type="button"
                     onClick={() => {
