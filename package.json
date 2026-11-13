@@ -13,6 +13,8 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1167.0",
+    "@aws-sdk/s3-request-presigner": "^3.1167.0",
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.118.0",
     "@types/pg": "^8.11.10",

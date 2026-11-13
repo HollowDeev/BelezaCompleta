@@ -5,6 +5,8 @@ import { ServiceItem, ServiceStep, ServicePriceType } from "@/types/service";
 import { TriageForm } from "@/types/triage";
 import { UserProfile } from "@/types/salon";
 import { formatBRL } from "@/lib/utils";
+import { compressImageFile } from "@/lib/storage/imageCompression";
+import { uploadImageToStorage } from "@/lib/storage/uploader";
 import {
   X,
   Plus,
@@ -89,7 +91,7 @@ export function ServiceEditorModal({
     service?.triageFormId || (triageForms[0]?.id ?? "")
   );
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -99,43 +101,34 @@ export function ServiceEditorModal({
     }
 
     setIsUploadingImage(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 1200;
-        let width = img.width;
-        let height = img.height;
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-          setImageUrl(compressedDataUrl);
-          setErrorMsg(null);
-        }
-        setIsUploadingImage(false);
-      };
-      img.onerror = () => {
-        setErrorMsg("Erro ao processar imagem.");
-        setIsUploadingImage(false);
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => {
-      setErrorMsg("Erro ao ler o arquivo de imagem.");
+    setErrorMsg(null);
+    try {
+      // 1. Otimiza com compressão canvas para WebP ~150KB
+      const compressed = await compressImageFile(file, {
+        maxDimension: 1200,
+        quality: 0.8,
+        mimeType: "image/webp",
+      });
+
+      // Preview imediato
+      setImageUrl(compressed.dataUrl);
+
+      // 2. Upload para Cloudflare R2
+      const publicUrl = await uploadImageToStorage(
+        compressed.blob,
+        `procedure-${Date.now()}.webp`,
+        "procedures"
+      );
+
+      if (publicUrl && publicUrl.startsWith("http")) {
+        setImageUrl(publicUrl);
+      }
+    } catch (err: any) {
+      console.error("Erro ao subir imagem de procedimento:", err);
+      setErrorMsg("Não foi possível enviar a imagem. Tente novamente.");
+    } finally {
       setIsUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   // Estados das Etapas do Procedimento

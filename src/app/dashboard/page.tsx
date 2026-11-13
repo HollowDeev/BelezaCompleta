@@ -28,6 +28,7 @@ import { InteractiveTutorialTour } from "@/components/tutorial/InteractiveTutori
 import { TutorialHelpModal } from "@/components/tutorial/TutorialHelpModal";
 import { TUTORIAL_STEPS, UPDATE_TUTORIAL_STEPS } from "@/components/tutorial/tutorialSteps";
 import { UpdateReleaseTutorialModal } from "@/components/tutorial/UpdateReleaseTutorialModal";
+import { CardSkeleton } from "@/components/common/SkeletonLoader";
 
 import { ServiceItem } from "@/types/service";
 import { TriageForm, TriageSubmission } from "@/types/triage";
@@ -770,7 +771,20 @@ export default function DashboardPage() {
 
         {/* Área de Visualização Dinâmica das Abas */}
         <main className="flex-1 p-3 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {adminTab === "operacao" && (
+          {isLoadingData && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-xs font-semibold text-stone-400">Sincronizando dados da sua agenda...</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </div>
+            </div>
+          )}
+
+          {!isLoadingData && adminTab === "operacao" && (
             <DayOperationView
               appointments={appointments}
               triageSubmissions={triageSubmissions}

@@ -15,6 +15,8 @@ import { AvailableDay, PreferredPeriod } from "@/types/availability";
 import { parseHHmmToMinutes } from "@/lib/utils";
 import { SalonStore } from "@/lib/storage/localStore";
 import { SupabaseDataService } from "@/lib/supabase/api";
+import { compressImageFile } from "@/lib/storage/imageCompression";
+import { uploadImageToStorage } from "@/lib/storage/uploader";
 import {
   Sparkles,
   Lightbulb,
@@ -252,38 +254,41 @@ export function GamifiedTriage({
     }
   }, [availableSlots, preferredSlot, isDayOpen]);
 
-  const handlePhotoUpload = (slot: "root" | "length" | "inspiration", e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
+
+  const handlePhotoUpload = async (slot: "root" | "length" | "inspiration", e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 1200;
-        let width = img.width;
-        let height = img.height;
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.82);
-          setUploadedPhotos((prev) => ({ ...prev, [slot]: compressedDataUrl }));
-          setStepValidationError(null);
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+    try {
+      setUploadingSlot(slot);
+      // 1. Otimiza no cliente usando canvas: reduz para máx 1400px e formato WebP qualidade 0.8
+      const compressed = await compressImageFile(file, {
+        maxDimension: 1400,
+        quality: 0.8,
+        mimeType: "image/webp",
+      });
+
+      // Salva de imediato para preview ultra-rápido no UI
+      setUploadedPhotos((prev) => ({ ...prev, [slot]: compressed.dataUrl }));
+      setStepValidationError(null);
+
+      // 2. Faz upload para o Cloudflare R2 em segundo plano
+      const publicUrl = await uploadImageToStorage(
+        compressed.blob,
+        `triage-${slot}-${Date.now()}.webp`,
+        "triages"
+      );
+
+      // Atualiza com a URL final pública do Cloudflare R2
+      if (publicUrl && publicUrl.startsWith("http")) {
+        setUploadedPhotos((prev) => ({ ...prev, [slot]: publicUrl }));
+      }
+    } catch (err) {
+      console.error("Erro ao comprimir/subir foto:", err);
+    } finally {
+      setUploadingSlot(null);
+    }
   };
 
   const [isFinished, setIsFinished] = useState(false);
@@ -407,6 +412,24 @@ export function GamifiedTriage({
           };
         });
 
+        // Garante que se ainda houver fotos em base64 que não foram enviadas pro R2, sobe agora antes de salvar
+        const finalPhotos = { ...uploadedPhotos };
+        if (finalPhotos.root && finalPhotos.root.startsWith("data:")) {
+          try {
+            finalPhotos.root = await uploadImageToStorage(finalPhotos.root, `triage-root-${Date.now()}.webp`, "triages");
+          } catch (e) {}
+        }
+        if (finalPhotos.length && finalPhotos.length.startsWith("data:")) {
+          try {
+            finalPhotos.length = await uploadImageToStorage(finalPhotos.length, `triage-length-${Date.now()}.webp`, "triages");
+          } catch (e) {}
+        }
+        if (finalPhotos.inspiration && finalPhotos.inspiration.startsWith("data:")) {
+          try {
+            finalPhotos.inspiration = await uploadImageToStorage(finalPhotos.inspiration, `triage-inspiration-${Date.now()}.webp`, "triages");
+          } catch (e) {}
+        }
+
         const submission: TriageSubmission = {
           id: `sub-${Date.now()}`,
           orgId: form.orgId,
@@ -420,9 +443,9 @@ export function GamifiedTriage({
           preferredTimeSlot: preferredSlot,
           answers: submissionAnswers,
           photos: {
-            currentHairRoot: uploadedPhotos.root,
-            currentHairLength: uploadedPhotos.length,
-            inspirationDesired: uploadedPhotos.inspiration,
+            currentHairRoot: finalPhotos.root,
+            currentHairLength: finalPhotos.length,
+            inspirationDesired: finalPhotos.inspiration,
           },
           status: "pending_review",
           submittedAt: new Date().toISOString(),

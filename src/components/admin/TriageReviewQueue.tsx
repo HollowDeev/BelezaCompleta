@@ -70,6 +70,10 @@ export function TriageReviewQueue({
   // Estado dos Accordions (IDs das triagens expandidas)
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
 
+  // Paginação inteligente de 5 em 5 para mitigar sobrecarga de dados/renderização
+  const PAGE_SIZE = 5;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
   // Modal para visualização ampliada de fotos (Galeria Fullscreen)
   const [activeGalleryPhotos, setActiveGalleryPhotos] = useState<GalleryPhoto[] | null>(null);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
@@ -327,7 +331,7 @@ export function TriageReviewQueue({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredSubmissions.map((sub) => {
+          {filteredSubmissions.slice(0, visibleCount).map((sub) => {
             const isPending = sub.status === "pending_review";
             const isApproved = sub.status === "approved";
             const isExpanded = Boolean(expandedIds[sub.id]);
@@ -534,6 +538,8 @@ export function TriageReviewQueue({
                               <img
                                 src={sub.photos.currentHairRoot}
                                 alt="Raiz"
+                                loading="lazy"
+                                decoding="async"
                                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-[#E7DCCE] shadow-xs group-hover:scale-105 transition-all"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-all">
@@ -553,6 +559,8 @@ export function TriageReviewQueue({
                               <img
                                 src={sub.photos.currentHairLength}
                                 alt="Comprimento"
+                                loading="lazy"
+                                decoding="async"
                                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-[#E7DCCE] shadow-xs group-hover:scale-105 transition-all"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-all">
@@ -572,6 +580,8 @@ export function TriageReviewQueue({
                               <img
                                 src={sub.photos.inspirationDesired}
                                 alt="Inspiração"
+                                loading="lazy"
+                                decoding="async"
                                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-[#E7DCCE] shadow-xs group-hover:scale-105 transition-all"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-all">
@@ -633,6 +643,32 @@ export function TriageReviewQueue({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Controle de Paginação (5 em 5) */}
+      {filteredSubmissions.length > visibleCount && (
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#E7DCCE]/60">
+          <p className="text-xs text-stone-500">
+            Exibindo <span className="font-bold text-[#2D1914]">{Math.min(visibleCount, filteredSubmissions.length)}</span> de{" "}
+            <span className="font-bold text-[#2D1914]">{filteredSubmissions.length}</span> triagens
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-[#2D1914] bg-[#FAF7F2] hover:bg-[#F2ECE1] border border-[#E7DCCE] transition-all shadow-2xs hover:shadow-xs active:scale-95"
+            >
+              Carregar mais 5 triagens
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibleCount(filteredSubmissions.length)}
+              className="px-3 py-2 rounded-xl text-xs font-semibold text-stone-500 hover:text-stone-800 transition-all"
+            >
+              Ver todas ({filteredSubmissions.length})
+            </button>
+          </div>
         </div>
       )}
 

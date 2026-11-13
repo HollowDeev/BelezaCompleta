@@ -50,6 +50,10 @@ export function ServiceManager({
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
+  // Paginação de serviços (5 em 5)
+  const PAGE_SIZE = 5;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
   // Espelhar Questionário
   const handleMirror = async () => {
     if (!targetServiceForMirror || !selectedBaseFormId) return;
@@ -168,7 +172,7 @@ export function ServiceManager({
             </button>
           </div>
         ) : (
-          services.map((service) => {
+          services.slice(0, visibleCount).map((service) => {
             const totalDuration = service.steps.reduce((sum, s) => sum + s.durationMin, 0);
             const hasTriage = service.requiresTriage;
 
@@ -348,6 +352,32 @@ export function ServiceManager({
               </div>
             );
           })
+        )}
+
+        {/* Paginação de Serviços (5 em 5) */}
+        {services.length > visibleCount && (
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#D8D0BD]/70">
+            <p className="text-xs text-[#736455]">
+              Exibindo <span className="font-bold text-[#1D3D3C]">{Math.min(visibleCount, services.length)}</span> de{" "}
+              <span className="font-bold text-[#1D3D3C]">{services.length}</span> serviços cadastrados
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#1D3D3C] bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] transition-all shadow-2xs hover:shadow-xs active:scale-95"
+              >
+                Carregar mais 5 serviços
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleCount(services.length)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold text-[#736455] hover:text-[#1D3D3C] transition-all"
+              >
+                Ver todos ({services.length})
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
