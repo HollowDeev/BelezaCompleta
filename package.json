@@ -22,6 +22,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "dotenv": "^18.0.10",
     "lucide-react": "^1.58.0",
     "next": "16.4.2",
     "pg": "^8.13.1",
