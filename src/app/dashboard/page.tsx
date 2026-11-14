@@ -923,6 +923,10 @@ export default function DashboardPage() {
                 if (prop) setViewingProposalModal(prop);
               }}
               onDirectApprove={handleDirectApproveTriage}
+              onDeleteSubmission={async (subId: string) => {
+                await SupabaseDataService.deleteTriageSubmission(subId);
+                await refreshAll();
+              }}
             />
           )}
 
@@ -935,6 +939,10 @@ export default function DashboardPage() {
               }}
               onEditProposal={(prop: LuxuryProposal) => {
                 setEditingProposal(prop);
+              }}
+              onDeleteProposal={async (propId: string) => {
+                await SupabaseDataService.deleteProposal(propId);
+                await refreshAll();
               }}
               onCreateManualProposal={() => {
                 setIsCreatingManualProposal(true);
@@ -950,6 +958,10 @@ export default function DashboardPage() {
               triageSubmissions={triageSubmissions}
               onSaveClient={async (newCli) => {
                 await SupabaseDataService.saveClient(newCli);
+                await refreshAll();
+              }}
+              onDeleteClient={async (clientId: string) => {
+                await SupabaseDataService.deleteClient(clientId);
                 await refreshAll();
               }}
               onViewProposal={(propId: string) => {
@@ -1018,6 +1030,10 @@ export default function DashboardPage() {
           prefilledServiceId={newAppointmentPrefill.serviceId}
           appointmentToEdit={appointmentToEdit}
           onSave={handleSaveNewAppointment}
+          onDelete={async (aptId: string) => {
+            await SupabaseDataService.deleteAppointment(aptId);
+            await refreshAll();
+          }}
           onClose={() => {
             setIsNewAppointmentModalOpen(false);
             setAppointmentToEdit(null);

@@ -27,6 +27,9 @@ import {
   UserCheck,
   Tag,
   KeyRound,
+  Trash2,
+  Edit2,
+  AlertTriangle,
 } from "lucide-react";
 
 interface ClientsManagerViewProps {
@@ -35,6 +38,7 @@ interface ClientsManagerViewProps {
   proposals: LuxuryProposal[];
   triageSubmissions: TriageSubmission[];
   onSaveClient: (client: SalonClient) => Promise<void>;
+  onDeleteClient?: (clientId: string) => Promise<void> | void;
   onViewProposal?: (proposalId: string) => void;
 }
 
@@ -77,11 +81,15 @@ export function ClientsManagerView({
   proposals,
   triageSubmissions,
   onSaveClient,
+  onDeleteClient,
   onViewProposal,
 }: ClientsManagerViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<"todas" | "vip" | "retorno">("todas");
   const [selectedClientForDetails, setSelectedClientForDetails] = useState<SalonClient | null>(null);
+  const [editingClient, setEditingClient] = useState<SalonClient | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
 
   // Formulário de Nova Cliente
@@ -125,16 +133,17 @@ export function ClientsManagerView({
     setIsSaving(true);
     try {
       const clientToSave: SalonClient = {
-        id: `cli-${Date.now()}`,
+        id: editingClient?.id || `cli-${Date.now()}`,
         name: newName,
         phone: newPhone,
         password: newPassword || "123",
         email: newEmail || undefined,
         notes: newNotes || undefined,
-        createdAt: new Date().toISOString(),
+        createdAt: editingClient?.createdAt || new Date().toISOString(),
       };
       await onSaveClient(clientToSave);
       setIsNewClientModalOpen(false);
+      setEditingClient(null);
       setNewName("");
       setNewPhone("");
       setNewPassword("123");
@@ -377,8 +386,34 @@ export function ClientsManagerView({
                     className="px-3.5 py-1.5 text-xs font-semibold text-[#1D3D3C] bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
                   >
                     <History className="w-3.5 h-3.5 text-[#C7A03A]" />
-                    <span>Ver Histórico Completo</span>
+                    <span>Ver Histórico</span>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      setEditingClient(client);
+                      setNewName(client.name);
+                      setNewPhone(client.phone);
+                      setNewEmail(client.email || "");
+                      setNewNotes(client.notes || "");
+                      setNewPassword(client.password || "123");
+                      setIsNewClientModalOpen(true);
+                    }}
+                    className="p-1.5 text-xs text-stone-500 hover:text-[#1D3D3C] hover:bg-[#FAF7F2] border border-[#D8D0BD] rounded-xl transition-all"
+                    title="Editar informações do cliente"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  {onDeleteClient && (
+                    <button
+                      onClick={() => setDeletingClientId(client.id)}
+                      className="p-1.5 text-xs text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-[#D8D0BD] hover:border-rose-200 rounded-xl transition-all"
+                      title="Excluir cadastro do cliente"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   <a
                     href={whatsappUrl}
@@ -698,10 +733,52 @@ export function ClientsManagerView({
                   disabled={isSaving}
                   className="px-5 py-2 text-xs font-bold text-white chocolate-gradient rounded-xl shadow-sm hover:opacity-95 transition-all active:scale-95 cursor-pointer"
                 >
-                  {isSaving ? "Salvando..." : "Salvar Cadastro"}
+                  {isSaving ? "Salvando..." : editingClient ? "Salvar Alterações" : "Salvar Cadastro"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Cliente */}
+      {deletingClientId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-rose-200">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-base text-[#1D3D3C]">Excluir este Cliente?</h3>
+            <p className="text-xs text-[#736455] leading-relaxed">
+              Tem certeza que deseja apagar o registro desta cliente? Históricos de agendamentos e propostas passadas continuarão arquivados.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeletingClientId(null)}
+                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl border border-stone-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!onDeleteClient || !deletingClientId) return;
+                  setIsDeleting(true);
+                  try {
+                    await onDeleteClient(deletingClientId);
+                    setDeletingClientId(null);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs flex items-center gap-1.5"
+              >
+                {isDeleting ? "Excluindo..." : "Sim, Excluir"}
+              </button>
+            </div>
           </div>
         </div>
       )}

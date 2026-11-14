@@ -198,6 +198,11 @@ export class SalonStore {
     setStorageItem("triage_submissions", list);
   }
 
+  static deleteTriageSubmission(id: string): void {
+    const list = this.getTriageSubmissions().filter((s) => s.id !== id);
+    setStorageItem("triage_submissions", list);
+  }
+
   static approveTriageDirectly(submissionId: string): { submission: TriageSubmission; appointment?: Appointment } | null {
     const submissions = this.getTriageSubmissions();
     const subIndex = submissions.findIndex((s) => s.id === submissionId);
@@ -255,6 +260,11 @@ export class SalonStore {
     } else {
       list.unshift(prop);
     }
+    setStorageItem("proposals", list);
+  }
+
+  static deleteProposal(id: string): void {
+    const list = this.getProposals().filter((p) => p.id !== id);
     setStorageItem("proposals", list);
   }
 
@@ -319,6 +329,11 @@ export class SalonStore {
     } else {
       list.unshift(apt);
     }
+    setStorageItem("appointments", list);
+  }
+
+  static deleteAppointment(id: string): void {
+    const list = this.getAppointments().filter((a) => a.id !== id);
     setStorageItem("appointments", list);
   }
 
@@ -533,6 +548,11 @@ export class SalonStore {
       setStorageItem("clients", list);
       return newClient;
     }
+  }
+
+  static deleteClient(id: string): void {
+    const list = this.getClients().filter((c) => c.id !== id);
+    setStorageItem("clients", list);
   }
 
   static getActiveClient(): SalonClient | null {

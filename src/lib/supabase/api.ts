@@ -389,6 +389,13 @@ export class SupabaseDataService {
     if (!isSupabaseConfigured || !supabase) return;
     try {
       if (isUuid(serviceId)) {
+        // Remove etapas vinculadas primeiro
+        await supabase.from("service_steps").delete().eq("service_id", serviceId);
+
+        // Desvincula de agendamentos e triagens existentes para não violar foreign key
+        await supabase.from("appointments").update({ service_id: null }).eq("service_id", serviceId);
+        await supabase.from("triage_submissions").update({ service_id: null }).eq("service_id", serviceId);
+
         const { error } = await supabase.from("services").delete().eq("id", serviceId);
         if (error) {
           console.error("Supabase delete service error:", error);
@@ -652,6 +659,20 @@ export class SupabaseDataService {
     }
   }
 
+  static async deleteTriageSubmission(id: string): Promise<void> {
+    SalonStore.deleteTriageSubmission(id);
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      if (isUuid(id)) {
+        await supabase.from("triage_submissions").delete().eq("id", id);
+      }
+      broadcastSync("triage_saved", id);
+    } catch (err) {
+      console.error("Error deleting triage submission in Supabase", err);
+      throw err;
+    }
+  }
+
   static async approveTriageDirectly(
     submissionId: string
   ): Promise<{ submission: TriageSubmission; appointment?: Appointment } | null> {
@@ -877,6 +898,29 @@ export class SupabaseDataService {
     } catch (err) {
       console.error("Error saving proposal in Supabase", err);
       return prop;
+    }
+  }
+
+  static async deleteProposal(id: string): Promise<void> {
+    SalonStore.deleteProposal(id);
+    if (!isSupabaseConfigured || !supabase) {
+      broadcastSync("proposal_saved", id);
+      return;
+    }
+    try {
+      if (isUuid(id)) {
+        // Desvincula triagens que apontam para esta proposta
+        await supabase.from("triage_submissions").update({ proposal_id: null }).eq("proposal_id", id);
+        const { error } = await supabase.from("proposals").delete().eq("id", id);
+        if (error) {
+          console.error("Supabase delete proposal error:", error);
+          throw new Error(error.message || "Erro ao excluir proposta do banco de dados.");
+        }
+      }
+      broadcastSync("proposal_saved", id);
+    } catch (err) {
+      console.error("Error deleting proposal in Supabase", err);
+      throw err;
     }
   }
 
@@ -1322,6 +1366,27 @@ export class SupabaseDataService {
     }
   }
 
+  static async deleteAppointment(id: string): Promise<void> {
+    SalonStore.deleteAppointment(id);
+    if (!isSupabaseConfigured || !supabase) {
+      broadcastSync("appointment_saved", id);
+      return;
+    }
+    try {
+      if (isUuid(id)) {
+        const { error } = await supabase.from("appointments").delete().eq("id", id);
+        if (error) {
+          console.error("Supabase delete appointment error:", error);
+          throw new Error(error.message || "Erro ao excluir agendamento do banco de dados.");
+        }
+      }
+      broadcastSync("appointment_saved", id);
+    } catch (err) {
+      console.error("Error deleting appointment in Supabase", err);
+      throw err;
+    }
+  }
+
   // 9. Gestão de Clientes & CRM
   static async getClients(): Promise<SalonClient[]> {
     let clients: SalonClient[] = [];
@@ -1497,6 +1562,27 @@ export class SupabaseDataService {
     } catch (err) {
       console.error("Error saving salon_client in Supabase", err);
       return savedLocal;
+    }
+  }
+
+  static async deleteClient(id: string): Promise<void> {
+    SalonStore.deleteClient(id);
+    if (!isSupabaseConfigured || !supabase) {
+      broadcastSync("client_saved", id);
+      return;
+    }
+    try {
+      if (isUuid(id)) {
+        const { error } = await supabase.from("salon_clients").delete().eq("id", id);
+        if (error) {
+          console.error("Supabase delete salon_client error:", error);
+          throw new Error(error.message || "Erro ao excluir cliente do banco de dados.");
+        }
+      }
+      broadcastSync("client_saved", id);
+    } catch (err) {
+      console.error("Error deleting salon_client in Supabase", err);
+      throw err;
     }
   }
 

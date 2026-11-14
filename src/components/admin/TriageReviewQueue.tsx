@@ -28,6 +28,7 @@ import {
   Eye,
   Check,
   X,
+  Trash2,
 } from "lucide-react";
 
 interface TriageReviewQueueProps {
@@ -45,6 +46,7 @@ interface TriageReviewQueueProps {
     price: number,
     openWhatsApp: boolean
   ) => Promise<void> | void;
+  onDeleteSubmission?: (submissionId: string) => Promise<void> | void;
 }
 
 type FilterType = "pending" | "encaixes" | "sent" | "approved" | "all";
@@ -58,11 +60,14 @@ export function TriageReviewQueue({
   onGenerateProposal,
   onViewProposal,
   onDirectApprove,
+  onDeleteSubmission,
 }: TriageReviewQueueProps) {
   const [selectedSubForProposal, setSelectedSubForProposal] =
     useState<TriageSubmission | null>(null);
   const [approvingSubmission, setApprovingSubmission] =
     useState<TriageSubmission | null>(null);
+  const [deletingSubmissionId, setDeletingSubmissionId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Filtro padrão: ATIVO por padrão apenas as que estão aguardando uma resposta ("pending")
   const [filterType, setFilterType] = useState<FilterType>("pending");
@@ -506,6 +511,18 @@ export function TriageReviewQueue({
                           <ChevronDown className="w-3.5 h-3.5" />
                         )}
                       </button>
+
+                      {/* Botão Excluir Triagem (Spam/Testes) */}
+                      {onDeleteSubmission && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingSubmissionId(sub.id)}
+                          className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition-all"
+                          title="Excluir esta triagem"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -707,6 +724,51 @@ export function TriageReviewQueue({
           }}
           onClose={() => setApprovingSubmission(null)}
         />
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Triagem */}
+      {deletingSubmissionId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-sm w-full p-5 pb-8 sm:p-6 shadow-2xl border-t border-x sm:border border-rose-200 animate-slide-up-sheet text-center">
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-3 sm:hidden shrink-0" />
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-base text-[#1D3D3C] mb-1">
+              Excluir esta Triagem?
+            </h3>
+            <p className="text-xs text-[#736455] mb-5 leading-relaxed">
+              Tem certeza que deseja apagar esta resposta de triagem? Esta ação removerá o registro da sua fila.
+            </p>
+            <div className="flex items-center justify-center space-x-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeletingSubmissionId(null)}
+                className="px-4 py-2 text-xs font-semibold text-[#736455] hover:bg-[#FAF7F2] rounded-xl border border-[#D8D0BD] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!onDeleteSubmission || !deletingSubmissionId) return;
+                  setIsDeleting(true);
+                  try {
+                    await onDeleteSubmission(deletingSubmissionId);
+                    setDeletingSubmissionId(null);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs active:scale-95 flex items-center gap-1.5"
+              >
+                {isDeleting ? "Excluindo..." : "Sim, Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

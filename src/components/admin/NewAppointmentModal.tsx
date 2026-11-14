@@ -36,6 +36,7 @@ interface NewAppointmentModalProps {
   prefilledServiceId?: string;
   appointmentToEdit?: Appointment | null;
   onSave: (appointment: Appointment) => void;
+  onDelete?: (appointmentId: string) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -49,6 +50,7 @@ export function NewAppointmentModal({
   prefilledServiceId,
   appointmentToEdit,
   onSave,
+  onDelete,
   onClose,
 }: NewAppointmentModalProps) {
   const [clientName, setClientName] = useState(
@@ -60,6 +62,8 @@ export function NewAppointmentModal({
   const [date, setDate] = useState(appointmentToEdit?.date || prefilledDate || "");
   const [time, setTime] = useState(appointmentToEdit?.startTime || prefilledTime);
   const [notes, setNotes] = useState(appointmentToEdit?.notes || "");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   // R8: Lista de Procedimentos Múltiplos (Procedure Builder)
   const [procedures, setProcedures] = useState<AppointmentProcedureItem[]>(() => {
@@ -717,23 +721,80 @@ export function NewAppointmentModal({
             </div>
           </div>
 
-          <div className="pt-3 pb-6 sm:py-4 px-5 sm:px-8 border-t border-[#E7DCCE]/60 flex items-center justify-end space-x-2 shrink-0 bg-white">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
-            >
-              Cancelar
-            </button>
+          <div className="pt-3 pb-6 sm:py-4 px-5 sm:px-8 border-t border-[#E7DCCE]/60 flex items-center justify-between gap-3 shrink-0 bg-white">
+            <div>
+              {appointmentToEdit && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(true)}
+                  className="px-3.5 py-2 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir Agendamento</span>
+                </button>
+              )}
+            </div>
 
-            <button
-              type="submit"
-              className="px-6 py-2.5 font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 transition-all active:scale-95"
-            >
-              {appointmentToEdit ? "Salvar Alterações" : "Confirmar Agendamento"}
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="submit"
+                className="px-6 py-2.5 font-bold text-white gold-gradient rounded-xl shadow-xs hover:opacity-95 transition-all active:scale-95"
+              >
+                {appointmentToEdit ? "Salvar Alterações" : "Confirmar Agendamento"}
+              </button>
+            </div>
           </div>
         </form>
+
+        {/* Modal de Confirmação de Exclusão de Agendamento */}
+        {showConfirmDelete && appointmentToEdit && onDelete && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-rose-200">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-base text-[#1D3D3C]">Cancelar este Agendamento?</h3>
+              <p className="text-xs text-[#736455] leading-relaxed">
+                Tem certeza que deseja apagar o agendamento de <strong>{appointmentToEdit.clientName}</strong> no dia {appointmentToEdit.date}? O horário será liberado imediatamente.
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setShowConfirmDelete(false)}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl border border-stone-200"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await onDelete(appointmentToEdit.id);
+                      setShowConfirmDelete(false);
+                      onClose();
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs flex items-center gap-1.5"
+                >
+                  {isDeleting ? "Excluindo..." : "Sim, Excluir"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

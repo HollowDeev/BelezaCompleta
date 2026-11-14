@@ -19,12 +19,15 @@ import {
   Eye,
   EyeOff,
   Plus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 interface ProposalsManagerViewProps {
   proposals: LuxuryProposal[];
   onViewProposal: (proposalId: string) => void;
   onEditProposal?: (proposal: LuxuryProposal) => void;
+  onDeleteProposal?: (proposalId: string) => Promise<void> | void;
   onCreateManualProposal?: () => void;
 }
 
@@ -32,9 +35,12 @@ export function ProposalsManagerView({
   proposals,
   onViewProposal,
   onEditProposal,
+  onDeleteProposal,
   onCreateManualProposal,
 }: ProposalsManagerViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingProposalId, setDeletingProposalId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const formatFirstViewed = (isoString?: string) => {
     if (!isoString) return "";
@@ -264,11 +270,65 @@ export function ProposalsManagerView({
                         </span>
                       )}
                     </button>
+                    {onDeleteProposal && (
+                      <button
+                        onClick={() => setDeletingProposalId(prop.id)}
+                        className="p-2 rounded-xl bg-white text-stone-600 hover:text-rose-600 hover:bg-rose-50 border border-[#E7DCCE] hover:border-rose-200 transition-all"
+                        title="Excluir ou cancelar esta proposta"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Proposta */}
+      {deletingProposalId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-sm w-full p-5 pb-8 sm:p-6 shadow-2xl border-t border-x sm:border border-rose-200 animate-slide-up-sheet text-center">
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-3 sm:hidden shrink-0" />
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-base text-[#1D3D3C] mb-1">
+              Excluir esta Proposta?
+            </h3>
+            <p className="text-xs text-[#736455] mb-5 leading-relaxed">
+              Tem certeza que deseja apagar esta proposta? O link enviado para a cliente deixará de ser acessível.
+            </p>
+            <div className="flex items-center justify-center space-x-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeletingProposalId(null)}
+                className="px-4 py-2 text-xs font-semibold text-[#736455] hover:bg-[#FAF7F2] rounded-xl border border-[#D8D0BD] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!onDeleteProposal || !deletingProposalId) return;
+                  setIsDeleting(true);
+                  try {
+                    await onDeleteProposal(deletingProposalId);
+                    setDeletingProposalId(null);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs active:scale-95 flex items-center gap-1.5"
+              >
+                {isDeleting ? "Excluindo..." : "Sim, Excluir"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
