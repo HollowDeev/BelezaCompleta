@@ -12,6 +12,17 @@ describe("EvolutionWhatsAppService", () => {
     expect(EvolutionWhatsAppService.sanitizePhone("5511999998888")).toBe("5511999998888");
     expect(EvolutionWhatsAppService.sanitizePhone("")).toBe("");
   });
+
+  it("handles disconnectInstance cleanly", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: "SUCCESS" }),
+    } as any);
+
+    const res = await EvolutionWhatsAppService.disconnectInstance();
+    expect(res.success).toBe(true);
+    expect(fetchSpy).toHaveBeenCalled();
+  });
 });
 
 describe("WhatsAppTriageBot (Deterministic Pre-Triage)", () => {

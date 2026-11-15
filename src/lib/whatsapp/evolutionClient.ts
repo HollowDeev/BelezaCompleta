@@ -64,17 +64,20 @@ export class EvolutionWhatsAppService {
     const instanceName = getInstanceName();
 
     try {
-      // 1. Tenta buscar o QR code direto
+      // 1. Tenta buscar o QR code direto da instância existente
       const connectUrl = `${getApiUrl()}/instance/connect/${instanceName}`;
       const connectRes = await fetch(connectUrl, { headers: this.getHeaders() });
 
       if (connectRes.ok) {
         const connectData = await connectRes.json();
-        return {
-          success: true,
-          state: connectData?.state || "connecting",
-          qrcode: connectData?.base64 || connectData?.qrcode?.base64,
-        };
+        const base64 = connectData?.base64 || connectData?.qrcode?.base64;
+        if (base64) {
+          return {
+            success: true,
+            state: "connecting",
+            qrcode: base64,
+          };
+        }
       }
 
       // 2. Se a instância não existe ainda, cria a instância com as configs do salão
@@ -89,7 +92,7 @@ export class EvolutionWhatsAppService {
           integration: "WHATSAPP-BAILEYS",
           webhook: {
             url: "http://host.docker.internal:3000/api/whatsapp/webhook",
-            byEvents: true,
+            byEvents: false,
             base64: false,
             events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
           },
@@ -98,10 +101,24 @@ export class EvolutionWhatsAppService {
 
       if (createRes.ok) {
         const createData = await createRes.json();
+        const qrcode = createData?.base64 || createData?.qrcode?.base64 || createData?.hash?.base64;
+        if (qrcode) {
+          return {
+            success: true,
+            state: "connecting",
+            qrcode,
+          };
+        }
+      }
+
+      // 3. Tenta uma nova chamada de connect caso a criação tenha inicializado a sessão
+      const retryRes = await fetch(connectUrl, { headers: this.getHeaders() });
+      if (retryRes.ok) {
+        const retryData = await retryRes.json();
         return {
           success: true,
-          state: "connecting",
-          qrcode: createData?.qrcode?.base64 || createData?.hash?.base64,
+          state: retryData?.state || "connecting",
+          qrcode: retryData?.base64 || retryData?.qrcode?.base64,
         };
       }
 
@@ -109,6 +126,32 @@ export class EvolutionWhatsAppService {
     } catch (err: any) {
       console.error("Evolution API getOrConnectInstance error:", err);
       return { success: false, state: "close" };
+    }
+  }
+
+  /**
+   * Desconecta e faz logout da instância para permitir reconexão limpa
+   */
+  public static async disconnectInstance(): Promise<{ success: boolean; message?: string }> {
+    const instanceName = getInstanceName();
+    try {
+      const url = `${getApiUrl()}/instance/logout/${instanceName}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: this.getHeaders(),
+      });
+
+      if (res.ok) {
+        return { success: true, message: "WhatsApp desconectado com sucesso." };
+      }
+
+      // Se logout falhar por sessão já fechada, força deleção da instância
+      const deleteUrl = `${getApiUrl()}/instance/delete/${instanceName}`;
+      await fetch(deleteUrl, { method: "DELETE", headers: this.getHeaders() });
+      return { success: true, message: "Instância resetada com sucesso." };
+    } catch (err: any) {
+      console.error("Evolution API disconnectInstance error:", err);
+      return { success: false, message: err.message };
     }
   }
 

@@ -31,6 +31,7 @@ import {
   QrCode,
   RefreshCw,
   Send,
+  LogOut,
 } from "lucide-react";
 
 interface SalonSettingsViewProps {
@@ -123,10 +124,31 @@ export function SalonSettingsView({
       setWaState((data.state as any) || "connecting");
       if (data.qrcode) {
         setWaQrCode(data.qrcode);
+        showToast("QR Code gerado! Aponte o WhatsApp do celular para conectar.");
+      } else {
+        showToast("Conexão iniciada. Se o QR Code demorar, clique em Conectar novamente.", "error");
       }
-      showToast("Comando de conexão enviado para a API WhatsApp!");
     } catch {
       showToast("Falha ao comunicar com a API WhatsApp.", "error");
+    } finally {
+      setWaLoading(false);
+    }
+  };
+
+  const handleDisconnectWhatsApp = async () => {
+    setWaLoading(true);
+    try {
+      const res = await fetch("/api/whatsapp/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setWaState("close");
+        setWaQrCode(null);
+        showToast("WhatsApp desconectado com sucesso!");
+      } else {
+        showToast(data.message || "Não foi possível desconectar.", "error");
+      }
+    } catch {
+      showToast("Erro ao desconectar WhatsApp.", "error");
     } finally {
       setWaLoading(false);
     }
@@ -152,10 +174,18 @@ export function SalonSettingsView({
   };
 
   useEffect(() => {
-    if (activeSubTab === "mensagens") {
-      checkWhatsAppStatus();
-    }
-  }, [activeSubTab]);
+    if (activeSubTab !== "mensagens") return;
+    checkWhatsAppStatus();
+
+    // Auto-polling para detectar leitura do QR Code sem precisar clicar em verificar
+    const interval = setInterval(() => {
+      if (waState === "connecting" || waQrCode) {
+        checkWhatsAppStatus();
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [activeSubTab, waState, waQrCode]);
 
   // Salvar Informações do Salão & Contato (Sincronizado ao site)
   const handleSaveContact = async (e: React.FormEvent) => {
@@ -666,7 +696,7 @@ export function SalonSettingsView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={checkWhatsAppStatus}
@@ -683,11 +713,33 @@ export function SalonSettingsView({
                     className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#2D1914] gold-gradient hover:opacity-95 shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
                   >
                     <QrCode className="w-3.5 h-3.5" />
-                    <span>{waLoading ? "Gerando..." : "Conectar WhatsApp"}</span>
+                    <span>{waLoading ? "Gerando QR Code..." : "Conectar WhatsApp"}</span>
+                  </button>
+                )}
+                {(waState === 'open' || waState === 'connecting' || waQrCode) && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectWhatsApp}
+                    disabled={waLoading}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    title="Desconectar do WhatsApp para reconectar ou trocar de número"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{waLoading ? "Desconectando..." : "Desconectar"}</span>
                   </button>
                 )}
               </div>
             </div>
+
+            {/* Alerta de Conectado com Sucesso */}
+            {waState === 'open' && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span><strong>WhatsApp Conectado!</strong> O salão está pronto para responder mensagens e disparar automações de triagem, propostas e pós-atendimento.</span>
+                </div>
+              </div>
+            )}
 
             {/* QR Code Container (Se aguardando leitura) */}
             {waQrCode && waState !== 'open' && (
