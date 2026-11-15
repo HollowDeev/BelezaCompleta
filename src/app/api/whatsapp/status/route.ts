@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { EvolutionWhatsAppService } from "@/lib/whatsapp/evolutionClient";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
   try {
     const status = await EvolutionWhatsAppService.getConnectionState();

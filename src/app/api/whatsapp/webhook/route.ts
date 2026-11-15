@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { EvolutionWhatsAppService } from "@/lib/whatsapp/evolutionClient";
 import { WhatsAppTriageBot } from "@/lib/whatsapp/triageBot";
 
-export const dynamic = "force-dynamic";
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);

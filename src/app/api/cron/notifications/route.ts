@@ -3,8 +3,6 @@ import { SupabaseDataService } from "@/lib/supabase/api";
 import { WhatsAppEventEngine } from "@/lib/whatsapp/eventEngine";
 import { EvolutionWhatsAppService } from "@/lib/whatsapp/evolutionClient";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req: NextRequest) {
   try {
     // 1. Verifica se a API do WhatsApp está conectada antes de processar a fila
