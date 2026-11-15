@@ -564,12 +564,31 @@ export default function DashboardPage() {
     setEditingProposal(null);
     setViewingProposalModal(savedProposal);
 
-    if (openWhatsApp && savedProposal.clientPhone) {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const proposalUrl = `${origin}/proposta/${savedProposal.id}`;
-      const msg = `Olá, ${savedProposal.clientName}! ✨\n\nSua proposta personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
-      const waLink = generateWhatsAppLink(savedProposal.clientPhone, msg);
-      window.open(waLink, "_blank", "noopener,noreferrer");
+    // Disparo automático via API WhatsApp (Docker) com fallback para WhatsApp Web
+    if (savedProposal.clientPhone) {
+      try {
+        const sendRes = await fetch("/api/whatsapp/send-proposal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proposal: savedProposal }),
+        });
+        const sendData = await sendRes.json().catch(() => ({}));
+        if (!sendData.success && openWhatsApp) {
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const proposalUrl = `${origin}/proposta/${savedProposal.id}`;
+          const msg = `Olá, ${savedProposal.clientName}! ✨\n\nSua proposta personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
+          const waLink = generateWhatsAppLink(savedProposal.clientPhone, msg);
+          window.open(waLink, "_blank", "noopener,noreferrer");
+        }
+      } catch {
+        if (openWhatsApp) {
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const proposalUrl = `${origin}/proposta/${savedProposal.id}`;
+          const msg = `Olá, ${savedProposal.clientName}! ✨\n\nSua proposta personalizada do Espaço da Beleza Gleicy Ronha já está pronta com todo carinho!\n\nVocê pode conferir todos os detalhes, valores e confirmar seu horário no link abaixo:\n🔗 ${proposalUrl}\n\nQualquer dúvida estou à disposição!`;
+          const waLink = generateWhatsAppLink(savedProposal.clientPhone, msg);
+          window.open(waLink, "_blank", "noopener,noreferrer");
+        }
+      }
     }
   };
 

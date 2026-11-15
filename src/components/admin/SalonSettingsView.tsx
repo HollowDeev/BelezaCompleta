@@ -28,6 +28,9 @@ import {
   MessageCircle,
   RotateCcw,
   Check,
+  QrCode,
+  RefreshCw,
+  Send,
 } from "lucide-react";
 
 interface SalonSettingsViewProps {
@@ -92,6 +95,67 @@ export function SalonSettingsView({
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  // Estado: WhatsApp API & Docker (Evolution API)
+  const [waState, setWaState] = useState<"loading" | "open" | "connecting" | "close">("loading");
+  const [waQrCode, setWaQrCode] = useState<string | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
+  const [cronTriggering, setCronTriggering] = useState(false);
+
+  const checkWhatsAppStatus = async () => {
+    try {
+      const res = await fetch("/api/whatsapp/status");
+      const data = await res.json();
+      setWaState(data.state || "close");
+      if (data.state === "open") {
+        setWaQrCode(null);
+      }
+    } catch {
+      setWaState("close");
+    }
+  };
+
+  const handleConnectWhatsApp = async () => {
+    setWaLoading(true);
+    try {
+      const res = await fetch("/api/whatsapp/connect", { method: "POST" });
+      const data = await res.json();
+      setWaState((data.state as any) || "connecting");
+      if (data.qrcode) {
+        setWaQrCode(data.qrcode);
+      }
+      showToast("Comando de conexão enviado para a API WhatsApp!");
+    } catch {
+      showToast("Falha ao comunicar com a API WhatsApp.", "error");
+    } finally {
+      setWaLoading(false);
+    }
+  };
+
+  const handleTriggerNotifications = async () => {
+    setCronTriggering(true);
+    try {
+      const res = await fetch("/api/cron/notifications");
+      const data = await res.json();
+      if (data.status === "success") {
+        showToast(
+          `Notificações processadas! Lembretes 24h: ${data.remindersSentCount}, Pós-atendimento: ${data.followupsSentCount}`
+        );
+      } else {
+        showToast(data.reason || "Nenhuma notificação pendente no momento.");
+      }
+    } catch {
+      showToast("Erro ao processar notificações.", "error");
+    } finally {
+      setCronTriggering(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === "mensagens") {
+      checkWhatsAppStatus();
+    }
+  }, [activeSubTab]);
 
   // Salvar Informações do Salão & Contato (Sincronizado ao site)
   const handleSaveContact = async (e: React.FormEvent) => {
@@ -578,6 +642,121 @@ export function SalonSettingsView({
           ======================================================== */}
       {activeSubTab === "mensagens" && (
         <div data-tutorial="settings-whatsapp-template" className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DCCE] shadow-xs space-y-6 animate-fade-in">
+          {/* PAINEL DE INTEGRAÇÃO WHATSAPP & DOCKER */}
+          <div className="bg-[#FAF7F2] rounded-2xl p-5 border border-[#C7A03A]/40 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${waState === 'open' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {waState === 'open' ? <MessageCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#2D1914] flex items-center gap-2">
+                    <span>API WhatsApp (Docker)</span>
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                      waState === 'open' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                      waState === 'connecting' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                      'bg-stone-200 text-stone-700 border border-stone-300'
+                    }`}>
+                      {waState === 'open' ? '🟢 Conectado' : waState === 'connecting' ? '🟡 Aguardando QR Code' : '⚪ Desconectado'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Instância ativa para pré-triagem automática, envio de propostas e confirmações.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={checkWhatsAppStatus}
+                  className="px-3 py-1.5 rounded-xl border border-[#D8D0BD] bg-white hover:bg-[#FAF7F2] text-xs font-bold text-[#736455] flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Verificar</span>
+                </button>
+                {waState !== 'open' && (
+                  <button
+                    type="button"
+                    onClick={handleConnectWhatsApp}
+                    disabled={waLoading}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#2D1914] gold-gradient hover:opacity-95 shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>{waLoading ? "Gerando..." : "Conectar WhatsApp"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* QR Code Container (Se aguardando leitura) */}
+            {waQrCode && waState !== 'open' && (
+              <div className="bg-white p-5 rounded-2xl border border-[#D8D0BD] flex flex-col sm:flex-row items-center gap-5 animate-fade-in">
+                <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-xs flex-shrink-0">
+                  <img
+                    src={waQrCode.startsWith("data:image") ? waQrCode : `data:image/png;base64,${waQrCode}`}
+                    alt="QR Code WhatsApp"
+                    className="w-48 h-48 object-contain"
+                  />
+                </div>
+                <div className="space-y-2 text-xs text-stone-600">
+                  <h4 className="font-bold text-[#2D1914] text-sm">Como conectar seu WhatsApp:</h4>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Abra o WhatsApp no celular da Gleicy</li>
+                    <li>Toque em <strong>Configurações / Opções</strong> (três pontos) &gt; <strong>Aparelhos Conectados</strong></li>
+                    <li>Toque em <strong>Conectar um Aparelho</strong></li>
+                    <li>Aponte a câmera para o QR Code ao lado</li>
+                  </ol>
+                  <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    O QR Code atualiza a cada 30 segundos. Após escanear, clique em <strong>Verificar</strong> acima.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Status das Automações */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-[#E7DCCE]/60">
+              <div className="p-2.5 rounded-xl bg-white/70 border border-[#E7DCCE] text-[11px] space-y-1">
+                <div className="font-bold text-[#2D1914] flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Pré-Triagem Sem IA</span>
+                </div>
+                <p className="text-stone-500">Menu interativo numérico para novos contatos e dúvidas.</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/70 border border-[#E7DCCE] text-[11px] space-y-1">
+                <div className="font-bold text-[#2D1914] flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Envio de Propostas</span>
+                </div>
+                <p className="text-stone-500">Link personalizado da proposta enviado após criação da triagem.</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/70 border border-[#E7DCCE] text-[11px] space-y-1">
+                <div className="font-bold text-[#2D1914] flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Lembretes & Pós-Care</span>
+                </div>
+                <p className="text-stone-500">Aviso 24h antes e pedido de avaliação/foto 1h30 após atendimento.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-stone-500">
+                Rotina automática de verificação ativa.
+              </span>
+              <button
+                type="button"
+                onClick={handleTriggerNotifications}
+                disabled={cronTriggering || waState !== 'open'}
+                className="px-3 py-1.5 rounded-xl border border-[#D8D0BD] bg-white hover:bg-[#FAF7F2] text-xs font-bold text-[#1D3D3C] flex items-center gap-1.5 transition-colors disabled:opacity-40"
+              >
+                <Send className="w-3.5 h-3.5 text-[#AD841D]" />
+                <span>{cronTriggering ? "Processando..." : "Disparar Lembretes Agora"}</span>
+              </button>
+            </div>
+          </div>
+
           <div className="border-b border-[#E7DCCE]/60 pb-4">
             <h2 className="font-editorial text-xl font-bold text-[#2D1914] flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-[#C7A03A]" />
