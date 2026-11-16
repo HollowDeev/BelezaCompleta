@@ -32,6 +32,7 @@ import {
   RefreshCw,
   Send,
   LogOut,
+  Trash2,
 } from "lucide-react";
 
 interface SalonSettingsViewProps {
@@ -39,6 +40,7 @@ interface SalonSettingsViewProps {
   profile: UserProfile | null;
   onUpdateOrganization: (updated: Partial<SalonOrganization>) => Promise<void>;
   onUpdateProfile: (updated: Partial<UserProfile>) => Promise<void>;
+  initialSubTab?: "contato" | "meta" | "mensagens" | "senha" | "perfil";
 }
 
 export function SalonSettingsView({
@@ -46,9 +48,12 @@ export function SalonSettingsView({
   profile,
   onUpdateOrganization,
   onUpdateProfile,
+  initialSubTab,
 }: SalonSettingsViewProps) {
   // Aba ativa interna de configurações
-  const [activeSubTab, setActiveSubTab] = useState<"contato" | "meta" | "mensagens" | "senha" | "perfil">("contato");
+  const [activeSubTab, setActiveSubTab] = useState<"contato" | "meta" | "mensagens" | "senha" | "perfil">(
+    initialSubTab || "contato"
+  );
 
   // Estado: Mensagem de Confirmação WhatsApp (R5)
   const [confirmationMessage, setConfirmationMessage] = useState(
@@ -102,6 +107,7 @@ export function SalonSettingsView({
   const [waQrCode, setWaQrCode] = useState<string | null>(null);
   const [waLoading, setWaLoading] = useState(false);
   const [cronTriggering, setCronTriggering] = useState(false);
+  const [showRemoveSyncConfirm, setShowRemoveSyncConfirm] = useState(false);
 
   const checkWhatsAppStatus = async () => {
     try {
@@ -137,18 +143,19 @@ export function SalonSettingsView({
 
   const handleDisconnectWhatsApp = async () => {
     setWaLoading(true);
+    setShowRemoveSyncConfirm(false);
     try {
       const res = await fetch("/api/whatsapp/disconnect", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setWaState("close");
         setWaQrCode(null);
-        showToast("WhatsApp desconectado com sucesso!");
+        showToast("Sincronização do WhatsApp removida com sucesso!");
       } else {
-        showToast(data.message || "Não foi possível desconectar.", "error");
+        showToast(data.message || "Não foi possível remover a sincronização.", "error");
       }
     } catch {
-      showToast("Erro ao desconectar WhatsApp.", "error");
+      showToast("Erro ao remover sincronização do WhatsApp.", "error");
     } finally {
       setWaLoading(false);
     }
@@ -716,18 +723,16 @@ export function SalonSettingsView({
                     <span>{waLoading ? "Gerando QR Code..." : "Conectar WhatsApp"}</span>
                   </button>
                 )}
-                {(waState === 'open' || waState === 'connecting' || waQrCode) && (
-                  <button
-                    type="button"
-                    onClick={handleDisconnectWhatsApp}
-                    disabled={waLoading}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
-                    title="Desconectar do WhatsApp para reconectar ou trocar de número"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>{waLoading ? "Desconectando..." : "Desconectar"}</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowRemoveSyncConfirm(true)}
+                  disabled={waLoading}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                  title="Remover sincronização com o WhatsApp"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  <span>Remover Sincronização</span>
+                </button>
               </div>
             </div>
 
@@ -805,6 +810,28 @@ export function SalonSettingsView({
               >
                 <Send className="w-3.5 h-3.5 text-[#AD841D]" />
                 <span>{cronTriggering ? "Processando..." : "Disparar Lembretes Agora"}</span>
+              </button>
+            </div>
+
+            {/* Box Dedicado: Remover Sincronização do WhatsApp */}
+            <div className="pt-3 border-t border-[#E7DCCE]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-50/40 p-4 rounded-2xl border border-red-200/70">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <span>Remover Sincronização do WhatsApp</span>
+                </span>
+                <p className="text-[11px] text-stone-600">
+                  Desconecta o celular da Gleicy, exclui a sessão e encerra as automações até nova conexão.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRemoveSyncConfirm(true)}
+                disabled={waLoading}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-red-700 bg-white hover:bg-red-50 border border-red-300 shadow-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 shrink-0 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                <span>Remover Sincronização</span>
               </button>
             </div>
           </div>
@@ -1083,6 +1110,51 @@ export function SalonSettingsView({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Remover Sincronização do WhatsApp */}
+      {showRemoveSyncConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 border border-[#D8D0BD] shadow-2xl animate-scale-up">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#2D1914]">
+                  Remover Sincronização do WhatsApp?
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Esta ação encerrará a conexão ativa da API com o WhatsApp.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed bg-[#FAF7F2] p-3.5 rounded-xl border border-[#D8D0BD]">
+              Ao remover a sincronização, o bot de pré-triagem, o envio automático de propostas e os lembretes 24h serão pausados até que uma nova conexão seja feita.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRemoveSyncConfirm(false)}
+                disabled={waLoading}
+                className="px-4 py-2 rounded-xl border border-[#D8D0BD] bg-white text-xs font-bold text-[#736455] hover:bg-[#FAF7F2] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDisconnectWhatsApp}
+                disabled={waLoading}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{waLoading ? "Removendo..." : "Sim, Remover Sincronização"}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

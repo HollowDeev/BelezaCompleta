@@ -130,25 +130,30 @@ export class EvolutionWhatsAppService {
   }
 
   /**
-   * Desconecta e faz logout da instância para permitir reconexão limpa
+   * Desconecta e remove completamente a sincronização da instância
    */
   public static async disconnectInstance(): Promise<{ success: boolean; message?: string }> {
     const instanceName = getInstanceName();
     try {
-      const url = `${getApiUrl()}/instance/logout/${instanceName}`;
-      const res = await fetch(url, {
+      // 1. Faz logout no Baileys/WhatsApp para fechar a conexão no aparelho
+      const logoutUrl = `${getApiUrl()}/instance/logout/${instanceName}`;
+      await fetch(logoutUrl, {
+        method: "DELETE",
+        headers: this.getHeaders(),
+      }).catch(() => null);
+
+      // 2. Deleta a instância na Evolution API para limpar tokens e remover sincronização
+      const deleteUrl = `${getApiUrl()}/instance/delete/${instanceName}`;
+      const deleteRes = await fetch(deleteUrl, {
         method: "DELETE",
         headers: this.getHeaders(),
       });
 
-      if (res.ok) {
-        return { success: true, message: "WhatsApp desconectado com sucesso." };
+      if (deleteRes.ok) {
+        return { success: true, message: "Sincronização do WhatsApp removida com sucesso." };
       }
 
-      // Se logout falhar por sessão já fechada, força deleção da instância
-      const deleteUrl = `${getApiUrl()}/instance/delete/${instanceName}`;
-      await fetch(deleteUrl, { method: "DELETE", headers: this.getHeaders() });
-      return { success: true, message: "Instância resetada com sucesso." };
+      return { success: true, message: "Instância desconectada com sucesso." };
     } catch (err: any) {
       console.error("Evolution API disconnectInstance error:", err);
       return { success: false, message: err.message };
