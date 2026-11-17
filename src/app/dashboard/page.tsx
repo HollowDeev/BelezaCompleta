@@ -22,6 +22,7 @@ import { AvailabilityManagerView } from "@/components/admin/AvailabilityManagerV
 import { PreReservationQueue } from "@/components/admin/PreReservationQueue";
 import { ProposalBuilderModal } from "@/components/proposal/ProposalBuilderModal";
 import { SalonSettingsView } from "@/components/admin/SalonSettingsView";
+import { BlackFridayManager } from "@/components/admin/BlackFridayManager";
 import { LuxuryProposalPDF } from "@/components/proposal/LuxuryProposalPDF";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { InteractiveTutorialTour } from "@/components/tutorial/InteractiveTutorialTour";
@@ -1115,6 +1116,14 @@ export default function DashboardPage() {
                   await refreshAll();
                 }
               }}
+            />
+          )}
+
+          {adminTab === "black-friday" && (
+            <BlackFridayManager
+              organization={organization}
+              services={services}
+              onRefresh={refreshAll}
             />
           )}
         </main>

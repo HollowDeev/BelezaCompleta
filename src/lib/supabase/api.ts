@@ -5,6 +5,7 @@ import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment, AppointmentProcedureItem } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
+import { BlackFridayCampaign, BlackFridayServiceConfig, ProgressiveDiscountConfig } from "@/types/blackFriday";
 import { SalonStore } from "@/lib/storage/localStore";
 import {
   AvailableDay,
@@ -1928,6 +1929,221 @@ export class SupabaseDataService {
     }
   }
 
+  // 13. Black Friday Campaigns
+  static async getActiveBlackFridayCampaign(orgId: string): Promise<BlackFridayCampaign | null> {
+    const validOrgId = resolveValidUuid(orgId, DEFAULT_ORG_ID) || orgId;
+
+    if (!isSupabaseConfigured || !supabase) {
+      return SalonStore.getActiveBlackFridayCampaign(validOrgId);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("black_friday_campaigns")
+        .select("*")
+        .eq("org_id", validOrgId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Error fetching active Black Friday campaign from Supabase:", error);
+        return SalonStore.getActiveBlackFridayCampaign(validOrgId);
+      }
+
+      if (!data) {
+        return SalonStore.getActiveBlackFridayCampaign(validOrgId);
+      }
+
+      const campaign = this.mapBlackFridayCampaign(data);
+      SalonStore.saveBlackFridayCampaign(campaign);
+      return campaign;
+    } catch (err) {
+      console.error("Error in getActiveBlackFridayCampaign:", err);
+      return SalonStore.getActiveBlackFridayCampaign(validOrgId);
+    }
+  }
+
+  static async getBlackFridayCampaign(orgId: string): Promise<BlackFridayCampaign | null> {
+    const validOrgId = resolveValidUuid(orgId, DEFAULT_ORG_ID) || orgId;
+
+    if (!isSupabaseConfigured || !supabase) {
+      return SalonStore.getBlackFridayCampaign(validOrgId);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("black_friday_campaigns")
+        .select("*")
+        .eq("org_id", validOrgId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Error fetching Black Friday campaign from Supabase:", error);
+        return SalonStore.getBlackFridayCampaign(validOrgId);
+      }
+
+      if (!data) {
+        return SalonStore.getBlackFridayCampaign(validOrgId);
+      }
+
+      const campaign = this.mapBlackFridayCampaign(data);
+      SalonStore.saveBlackFridayCampaign(campaign);
+      return campaign;
+    } catch (err) {
+      console.error("Error in getBlackFridayCampaign:", err);
+      return SalonStore.getBlackFridayCampaign(validOrgId);
+    }
+  }
+
+  static async createBlackFridayCampaign(
+    data: Partial<BlackFridayCampaign>
+  ): Promise<BlackFridayCampaign> {
+    const validOrgId = resolveValidUuid(data.orgId, DEFAULT_ORG_ID) || DEFAULT_ORG_ID;
+    const now = new Date().toISOString();
+
+    const campaignId =
+      data.id && isUuid(data.id)
+        ? data.id
+        : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `bf-${Date.now()}`;
+
+    const newCampaign: BlackFridayCampaign = {
+      id: campaignId,
+      orgId: validOrgId,
+      name: data.name || "Black Friday",
+      isActive: Boolean(data.isActive),
+      startsAt: data.startsAt ?? null,
+      endsAt: data.endsAt ?? null,
+      restrictSchedule: Boolean(data.restrictSchedule),
+      restrictedDates: data.restrictedDates || [],
+      servicesConfig: data.servicesConfig || [],
+      progressiveDiscount: data.progressiveDiscount ?? null,
+      createdAt: data.createdAt || now,
+      updatedAt: now,
+    };
+
+    const savedLocal = SalonStore.saveBlackFridayCampaign(newCampaign);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload = {
+          id: savedLocal.id,
+          org_id: savedLocal.orgId,
+          name: savedLocal.name,
+          is_active: savedLocal.isActive,
+          starts_at: savedLocal.startsAt,
+          ends_at: savedLocal.endsAt,
+          restrict_schedule: savedLocal.restrictSchedule,
+          restricted_dates: savedLocal.restrictedDates,
+          services_config: savedLocal.servicesConfig.map((s) => ({
+            service_id: s.serviceId,
+            discount_type: s.discountType,
+            discount_value: s.discountValue,
+            black_price: s.blackPrice,
+          })),
+          progressive_discount: savedLocal.progressiveDiscount
+            ? {
+                tiers: savedLocal.progressiveDiscount.tiers.map((t) => ({
+                  min_services: t.minServices,
+                  discount_percent: t.discountPercent,
+                })),
+              }
+            : null,
+          created_at: savedLocal.createdAt,
+          updated_at: savedLocal.updatedAt,
+        };
+
+        const { data: dbData, error } = await supabase
+          .from("black_friday_campaigns")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) {
+          console.warn("Error inserting Black Friday campaign in Supabase:", error);
+        } else if (dbData) {
+          const mapped = this.mapBlackFridayCampaign(dbData);
+          SalonStore.saveBlackFridayCampaign(mapped);
+          broadcastSync("black_friday_campaign_saved", mapped.id);
+          return mapped;
+        }
+      } catch (err) {
+        console.error("Error in createBlackFridayCampaign Supabase insert:", err);
+      }
+    }
+
+    broadcastSync("black_friday_campaign_saved", savedLocal.id);
+    return savedLocal;
+  }
+
+  static async updateBlackFridayCampaign(
+    id: string,
+    data: Partial<BlackFridayCampaign>
+  ): Promise<BlackFridayCampaign | null> {
+    const updatedLocal = SalonStore.updateBlackFridayCampaign(id, data);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        };
+
+        if (data.name !== undefined) payload.name = data.name;
+        if (data.isActive !== undefined) payload.is_active = data.isActive;
+        if (data.startsAt !== undefined) payload.starts_at = data.startsAt;
+        if (data.endsAt !== undefined) payload.ends_at = data.endsAt;
+        if (data.restrictSchedule !== undefined) payload.restrict_schedule = data.restrictSchedule;
+        if (data.restrictedDates !== undefined) payload.restricted_dates = data.restrictedDates;
+        if (data.servicesConfig !== undefined) {
+          payload.services_config = data.servicesConfig.map((s) => ({
+            service_id: s.serviceId,
+            discount_type: s.discountType,
+            discount_value: s.discountValue,
+            black_price: s.blackPrice,
+          }));
+        }
+        if (data.progressiveDiscount !== undefined) {
+          payload.progressive_discount = data.progressiveDiscount
+            ? {
+                tiers: data.progressiveDiscount.tiers.map((t) => ({
+                  min_services: t.minServices,
+                  discount_percent: t.discountPercent,
+                })),
+              }
+            : null;
+        }
+
+        const { data: dbData, error } = await supabase
+          .from("black_friday_campaigns")
+          .update(payload)
+          .eq("id", id)
+          .select()
+          .maybeSingle();
+
+        if (error) {
+          console.warn("Error updating Black Friday campaign in Supabase:", error);
+        } else if (dbData) {
+          const mapped = this.mapBlackFridayCampaign(dbData);
+          SalonStore.saveBlackFridayCampaign(mapped);
+          broadcastSync("black_friday_campaign_saved", mapped.id);
+          return mapped;
+        }
+      } catch (err) {
+        console.error("Error in updateBlackFridayCampaign Supabase update:", err);
+      }
+    }
+
+    if (updatedLocal) {
+      broadcastSync("black_friday_campaign_saved", updatedLocal.id);
+    }
+    return updatedLocal;
+  }
+
   // Mappers
   private static mapAvailableDay(row: Record<string, unknown>): AvailableDay {
     return {
@@ -1982,6 +2198,60 @@ export class SupabaseDataService {
     };
   }
 
+  private static mapBlackFridayCampaign(row: Record<string, unknown>): BlackFridayCampaign {
+    const rawServices = Array.isArray(row.services_config)
+      ? row.services_config
+      : Array.isArray(row.servicesConfig)
+      ? (row.servicesConfig as unknown[])
+      : [];
+
+    const servicesConfig: BlackFridayServiceConfig[] = rawServices.map((s: any) => ({
+      serviceId: (s.service_id ?? s.serviceId ?? "") as string,
+      discountType: (s.discount_type ?? s.discountType ?? "percentage") as any,
+      discountValue:
+        s.discount_value !== undefined
+          ? Number(s.discount_value)
+          : s.discountValue !== undefined
+          ? Number(s.discountValue)
+          : undefined,
+      blackPrice:
+        s.black_price !== undefined
+          ? Number(s.black_price)
+          : s.blackPrice !== undefined
+          ? Number(s.blackPrice)
+          : undefined,
+    }));
+
+    const rawProgressive = (row.progressive_discount || row.progressiveDiscount) as any;
+    let progressiveDiscount: ProgressiveDiscountConfig | null = null;
+    if (rawProgressive && Array.isArray(rawProgressive.tiers)) {
+      progressiveDiscount = {
+        tiers: rawProgressive.tiers.map((t: any) => ({
+          minServices: Number(t.min_services ?? t.minServices ?? 2),
+          discountPercent: Number(t.discount_percent ?? t.discountPercent ?? 0),
+        })),
+      };
+    }
+
+    const rawDates = row.restricted_dates ?? row.restrictedDates;
+    const restrictedDates = Array.isArray(rawDates) ? (rawDates as string[]) : [];
+
+    return {
+      id: String(row.id || ""),
+      orgId: String(row.org_id ?? row.orgId ?? DEFAULT_ORG_ID),
+      name: String(row.name || "Black Friday"),
+      isActive: Boolean(row.is_active ?? row.isActive),
+      startsAt: (row.starts_at ?? row.startsAt ?? null) as string | null,
+      endsAt: (row.ends_at ?? row.endsAt ?? null) as string | null,
+      restrictSchedule: Boolean(row.restrict_schedule ?? row.restrictSchedule),
+      restrictedDates,
+      servicesConfig,
+      progressiveDiscount,
+      createdAt: (row.created_at ?? row.createdAt ?? new Date().toISOString()) as string,
+      updatedAt: (row.updated_at ?? row.updatedAt ?? new Date().toISOString()) as string,
+    };
+  }
+
   // Delegadores de instância
   getAvailableDays = SupabaseDataService.getAvailableDays;
   saveAvailableDay = SupabaseDataService.saveAvailableDay;
@@ -1997,5 +2267,9 @@ export class SupabaseDataService {
   getAppointmentsByClientPhone = SupabaseDataService.getAppointmentsByClientPhone;
   recordProposalFirstView = SupabaseDataService.recordProposalFirstView;
   approveTriageDirectly = SupabaseDataService.approveTriageDirectly;
+  getActiveBlackFridayCampaign = SupabaseDataService.getActiveBlackFridayCampaign;
+  getBlackFridayCampaign = SupabaseDataService.getBlackFridayCampaign;
+  createBlackFridayCampaign = SupabaseDataService.createBlackFridayCampaign;
+  updateBlackFridayCampaign = SupabaseDataService.updateBlackFridayCampaign;
 }
 

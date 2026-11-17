@@ -4,6 +4,7 @@ import { TriageForm, TriageSubmission } from "@/types/triage";
 import { LuxuryProposal, ProposalTemplate } from "@/types/proposal";
 import { Appointment, AppointmentProcedureItem } from "@/types/appointment";
 import { SalonClient } from "@/types/client";
+import { BlackFridayCampaign } from "@/types/blackFriday";
 import {
   AvailableDay,
   PreReservation,
@@ -757,6 +758,97 @@ export class SalonStore {
     return newTpl;
   }
 
+  // Black Friday Campaigns
+  static getBlackFridayCampaigns(): BlackFridayCampaign[] {
+    return getStorageItem<BlackFridayCampaign[]>("black_friday_campaigns", initialBlackFridayCampaigns);
+  }
+
+  static getActiveBlackFridayCampaign(orgId: string): BlackFridayCampaign | null {
+    const list = this.getBlackFridayCampaigns();
+    const isMatch = (cOrg: string) =>
+      cOrg === orgId ||
+      (orgId === "org-gleicy-ronha" && cOrg === "11111111-1111-4111-8111-111111111111") ||
+      (cOrg === "org-gleicy-ronha" && orgId === "11111111-1111-4111-8111-111111111111");
+
+    const activeList = list
+      .filter((c) => isMatch(c.orgId) && Boolean(c.isActive))
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    return activeList[0] || null;
+  }
+
+  static getBlackFridayCampaign(orgId: string): BlackFridayCampaign | null {
+    const list = this.getBlackFridayCampaigns();
+    const isMatch = (cOrg: string) =>
+      cOrg === orgId ||
+      (orgId === "org-gleicy-ronha" && cOrg === "11111111-1111-4111-8111-111111111111") ||
+      (cOrg === "org-gleicy-ronha" && orgId === "11111111-1111-4111-8111-111111111111");
+
+    const matching = list
+      .filter((c) => isMatch(c.orgId))
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    return matching[0] || null;
+  }
+
+  static saveBlackFridayCampaign(campaign: BlackFridayCampaign): BlackFridayCampaign {
+    const list = this.getBlackFridayCampaigns();
+    const now = new Date().toISOString();
+    const saved: BlackFridayCampaign = {
+      ...campaign,
+      createdAt: campaign.createdAt || now,
+      updatedAt: now,
+    };
+
+    if (saved.isActive) {
+      list.forEach((c) => {
+        if (c.orgId === saved.orgId && c.id !== saved.id) {
+          c.isActive = false;
+          c.updatedAt = now;
+        }
+      });
+    }
+
+    const existingIdx = list.findIndex((c) => c.id === saved.id);
+    if (existingIdx >= 0) {
+      list[existingIdx] = saved;
+    } else {
+      list.unshift(saved);
+    }
+
+    setStorageItem("black_friday_campaigns", list);
+    return saved;
+  }
+
+  static updateBlackFridayCampaign(
+    id: string,
+    data: Partial<BlackFridayCampaign>
+  ): BlackFridayCampaign | null {
+    const list = this.getBlackFridayCampaigns();
+    const idx = list.findIndex((c) => c.id === id);
+    if (idx === -1) return null;
+
+    const now = new Date().toISOString();
+    const updated: BlackFridayCampaign = {
+      ...list[idx],
+      ...data,
+      updatedAt: now,
+    };
+
+    if (updated.isActive) {
+      list.forEach((c) => {
+        if (c.orgId === updated.orgId && c.id !== updated.id) {
+          c.isActive = false;
+          c.updatedAt = now;
+        }
+      });
+    }
+
+    list[idx] = updated;
+    setStorageItem("black_friday_campaigns", list);
+    return updated;
+  }
+
   static resetToDefaults(): void {
     if (typeof window === "undefined") return;
     localStorage.removeItem(STORAGE_KEY_PREFIX + "organization");
@@ -771,6 +863,7 @@ export class SalonStore {
     localStorage.removeItem(STORAGE_KEY_PREFIX + "available_days");
     localStorage.removeItem(STORAGE_KEY_PREFIX + "pre_reservations");
     localStorage.removeItem(STORAGE_KEY_PREFIX + "availability_templates");
+    localStorage.removeItem(STORAGE_KEY_PREFIX + "black_friday_campaigns");
   }
 }
 
@@ -815,3 +908,6 @@ export const initialAvailabilityTemplates: AvailabilityTemplate[] = [
     createdAt: "2026-10-01T00:00:00Z",
   },
 ];
+
+export const initialBlackFridayCampaigns: BlackFridayCampaign[] = [];
+

@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { SupabaseDataService } from "@/lib/supabase/api";
+import { SupabaseDataService, DEFAULT_ORG_ID } from "@/lib/supabase/api";
 import { SalonStore } from "@/lib/storage/localStore";
 import { broadcastSync } from "@/lib/sync/syncBus";
 
 // Componentes da Nova Identidade Visual Oficial
 import { ClientNavbar } from "@/components/client/ClientNavbar";
 import { HeroSection } from "@/components/client/HeroSection";
+import { BlackFridayBanner } from "@/components/client/BlackFridayBanner";
+import { BlackFridayHero } from "@/components/client/BlackFridayHero";
 import { StatsBanner } from "@/components/client/StatsBanner";
 import { Transformations3DCarousel } from "@/components/client/Transformations3DCarousel";
 import { AboutStorySection } from "@/components/client/AboutStorySection";
@@ -32,6 +34,8 @@ import { Appointment } from "@/types/appointment";
 import { LuxuryProposal } from "@/types/proposal";
 import { SalonClient } from "@/types/client";
 import { AvailableDay, PreReservation, PreferredPeriod } from "@/types/availability";
+import { BlackFridayCampaign } from "@/types/blackFriday";
+import { isCampaignActive } from "@/lib/services/blackFridayPricing";
 
 import {
   Sparkles,
@@ -48,11 +52,11 @@ import {
   Search,
 } from "lucide-react";
 import { buildCompositeService } from "@/lib/services/composite";
-export { buildCompositeService };
 
 export default function ClientHomePage() {
   const [organization, setOrganization] = useState<SalonOrganization | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
+  const [blackFridayCampaign, setBlackFridayCampaign] = useState<BlackFridayCampaign | null>(null);
   const [triageForms, setTriageForms] = useState<TriageForm[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [proposals, setProposals] = useState<LuxuryProposal[]>([]);
@@ -113,13 +117,14 @@ export default function ClientHomePage() {
         nextMonth.setDate(nextMonth.getDate() + 45);
         const nextMonthStr = nextMonth.toISOString().split("T")[0];
 
-        const [org, srvs, forms, apts, props, days] = await Promise.all([
-          SupabaseDataService.getOrganization(),
+        const org = await SupabaseDataService.getOrganization();
+        const [srvs, forms, apts, props, days, bfCampaign] = await Promise.all([
           SupabaseDataService.getServices(),
           SupabaseDataService.getTriageForms(),
           SupabaseDataService.getAppointments(),
           SupabaseDataService.getProposals(),
           SupabaseDataService.getAvailableDays("user-gleicy-ronha", todayStr, nextMonthStr),
+          SupabaseDataService.getActiveBlackFridayCampaign(org?.id || DEFAULT_ORG_ID),
         ]);
         setOrganization(org);
         setServices(srvs);
@@ -127,6 +132,7 @@ export default function ClientHomePage() {
         setAppointments(apts);
         setProposals(props);
         setAvailableDays(days);
+        setBlackFridayCampaign(bfCampaign);
       } catch (err) {
         console.error("Erro ao carregar dados da vitrine", err);
       } finally {
@@ -324,9 +330,18 @@ export default function ClientHomePage() {
     ? organization.phone.replace(/\D/g, "")
     : "5511995975725";
 
+  const isBFActive = isCampaignActive(blackFridayCampaign);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FCF5EB] text-[#1D3D3C]">
+      {/* Black Friday Sticky Banner (Top Bar) */}
+      {isBFActive && blackFridayCampaign && (
+        <BlackFridayBanner
+          campaign={blackFridayCampaign}
+          onCtaClick={() => scrollToSection("servicos")}
+        />
+      )}
+
       {/* 1. Navbar Oficial */}
       <ClientNavbar
         organization={organization}
@@ -335,12 +350,21 @@ export default function ClientHomePage() {
         onScrollToSection={scrollToSection}
       />
 
-      {/* 2. Hero Section */}
-      <HeroSection
-        organization={organization}
-        onExploreServices={() => scrollToSection("servicos")}
-        onBookNow={() => scrollToSection("servicos")}
-      />
+      {/* 2. Hero Section (Temático Black Friday quando ativa ou Padrão) */}
+      {isBFActive && blackFridayCampaign ? (
+        <BlackFridayHero
+          organization={organization}
+          campaign={blackFridayCampaign}
+          onExploreServices={() => scrollToSection("servicos")}
+          onBookNow={() => scrollToSection("servicos")}
+        />
+      ) : (
+        <HeroSection
+          organization={organization}
+          onExploreServices={() => scrollToSection("servicos")}
+          onBookNow={() => scrollToSection("servicos")}
+        />
+      )}
 
       {/* 3. Faixa de Estatísticas / Prova Social Numérica */}
       <StatsBanner onBookNow={() => scrollToSection("servicos")} />
@@ -413,6 +437,7 @@ export default function ClientHomePage() {
       {/* 6. Catálogo de Serviços com Valores e Etapas */}
       <TransparentServicesCatalog
         services={services}
+        blackFridayCampaign={isBFActive ? blackFridayCampaign : null}
         onSelectService={handleSelectService}
         onOpenMultiServiceSelector={() => setIsMultiServiceModalOpen(true)}
         whatsappNumber={whatsappNumber}
@@ -568,6 +593,7 @@ export default function ClientHomePage() {
                 service={selectedService}
                 existingAppointments={appointments}
                 availableDays={availableDays}
+                campaign={isBFActive ? blackFridayCampaign : null}
                 onConfirmBooking={handleConfirmDirectBooking}
                 onRequestPreReservation={handlePreReservationDone}
                 onCancel={() => setIsPickingSlot(false)}

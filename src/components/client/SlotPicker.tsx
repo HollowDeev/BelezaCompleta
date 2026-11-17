@@ -8,9 +8,11 @@ import { AvailableDay, PreReservation, PreferredPeriod } from "@/types/availabil
 import {
   calculateAvailableSlots,
   calculateDaySlotGrid,
+  validateServiceDateRestriction,
   AvailableSlot,
   DaySlotItem,
 } from "@/lib/scheduling/engine";
+import { BlackFridayCampaign, BlackFridayCampaignRow } from "@/types/blackFriday";
 import { SalonStore } from "@/lib/storage/localStore";
 import { SupabaseDataService } from "@/lib/supabase/api";
 import { formatBRL, parseHHmmToMinutes } from "@/lib/utils";
@@ -46,6 +48,8 @@ interface SlotPickerProps {
   onConfirmBooking: (appointment: Appointment) => void;
   onCancel: () => void;
   onRequestPreReservation?: (preReservation: PreReservation) => void;
+  campaign?: BlackFridayCampaign | BlackFridayCampaignRow | null;
+  blackFridayCampaign?: BlackFridayCampaign | BlackFridayCampaignRow | null;
 }
 
 // Gera os próximos 21 dias para o seletor visual
@@ -80,7 +84,10 @@ export function SlotPicker({
   onConfirmBooking,
   onCancel,
   onRequestPreReservation,
+  campaign: propCampaign,
+  blackFridayCampaign: propBlackFridayCampaign,
 }: SlotPickerProps) {
+  const activeCampaign = propCampaign ?? propBlackFridayCampaign ?? null;
   const [upcomingDays, setUpcomingDays] = useState<{
     dateStr: string;
     dayNum: number;
@@ -183,6 +190,7 @@ export function SlotPicker({
             breakStartMinutes: dConfig.breakStart ? parseHHmmToMinutes(dConfig.breakStart) : undefined,
             breakEndMinutes: dConfig.breakEnd ? parseHHmmToMinutes(dConfig.breakEnd) : undefined,
             slotIntervalMinutes: 30,
+            blackFridayCampaign: activeCampaign,
           }
         );
         map[day.dateStr] = {
@@ -193,7 +201,7 @@ export function SlotPicker({
       }
     });
     return map;
-  }, [upcomingDays, daysList, service, existingAppointments]);
+  }, [upcomingDays, daysList, service, existingAppointments, activeCampaign]);
 
   // Configuração do dia selecionado
   const currentDayConfig = useMemo(() => {
@@ -201,6 +209,11 @@ export function SlotPicker({
   }, [daysList, selectedDate]);
 
   const isDayOpen = Boolean(currentDayConfig);
+
+  // Validação de restrição de data da Black Friday
+  const dateRestriction = useMemo(() => {
+    return validateServiceDateRestriction(service, selectedDate, activeCampaign);
+  }, [service, selectedDate, activeCampaign]);
 
   // Calcula a grade completa de horários do dia (incluindo ocupados por agendamento e pausas)
   const dayGridSlots = useMemo(() => {
@@ -212,6 +225,7 @@ export function SlotPicker({
       breakStartMinutes: currentDayConfig?.breakStart ? parseHHmmToMinutes(currentDayConfig.breakStart) : undefined,
       breakEndMinutes: currentDayConfig?.breakEnd ? parseHHmmToMinutes(currentDayConfig.breakEnd) : undefined,
       slotIntervalMinutes: 30,
+      blackFridayCampaign: activeCampaign,
     };
 
     return calculateDaySlotGrid(
@@ -221,7 +235,7 @@ export function SlotPicker({
       existingAppointments,
       salonConfig
     );
-  }, [service, selectedDate, existingAppointments, isDayOpen, currentDayConfig]);
+  }, [service, selectedDate, existingAppointments, isDayOpen, currentDayConfig, activeCampaign]);
 
   const availableSlots = useMemo(() => dayGridSlots.filter((s) => s.isAvailable), [dayGridSlots]);
   const availableSlotsCount = availableSlots.length;
@@ -253,6 +267,13 @@ export function SlotPicker({
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+
+    // Guard de validação pré-agendamento para restrição de datas da Black Friday
+    const restriction = validateServiceDateRestriction(service, selectedDate, activeCampaign);
+    if (!restriction.isAllowed && restriction.isRestrictedDate) {
+      setAuthError(restriction.reason || "Agendamento bloqueado: esta data possui agenda exclusiva para procedimentos da Black Friday.");
+      return;
+    }
 
     if (!selectedSlot) {
       setAuthError("Por favor, selecione um horário disponível.");
@@ -354,6 +375,13 @@ export function SlotPicker({
   // Solicitação de Orçamento sem Bloquear Horário na Grade
   const handleRequestUncommittedQuote = async () => {
     setAuthError("");
+
+    const targetDate = selectedDate || new Date().toISOString().split("T")[0];
+    const restriction = validateServiceDateRestriction(service, targetDate, activeCampaign);
+    if (!restriction.isAllowed && restriction.isRestrictedDate) {
+      setAuthError(restriction.reason || "Orçamento bloqueado: esta data possui agenda exclusiva para procedimentos da Black Friday.");
+      return;
+    }
 
     let clientToUse: SalonClient | null = activeClient;
     setIsAuthenticating(true);
@@ -828,6 +856,45 @@ export function SlotPicker({
               })}
             </div>
           </div>
+
+          {/* Banner visual de restrição de agenda da Black Friday */}
+          {dateRestriction.isRestrictedDate && (
+            <div
+              data-testid="slot-picker-restriction-banner"
+              className={`p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-all ${
+                !dateRestriction.isAllowed
+                  ? "bg-amber-950/90 text-[#FCF5EB] border-[#C7A03A]"
+                  : "bg-[#080F0E] text-[#FCF5EB] border-[#C7A03A]/60"
+              }`}
+            >
+              {!dateRestriction.isAllowed ? (
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              ) : (
+                <Sparkles className="w-5 h-5 text-[#C7A03A] shrink-0 mt-0.5" />
+              )}
+              <div className="text-xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-[#D9B85F] uppercase tracking-wide">
+                    Agenda Especial Black Friday ({selectedDate})
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      !dateRestriction.isAllowed
+                        ? "bg-rose-900/80 text-rose-200 border border-rose-700/60"
+                        : "bg-[#1D3D3C] text-[#C7A03A] border border-[#C7A03A]/40"
+                    }`}
+                  >
+                    {!dateRestriction.isAllowed ? "Procedimento Não Participante" : "Procedimento Participante"}
+                  </span>
+                </div>
+                <p className="text-stone-300 leading-relaxed">
+                  {!dateRestriction.isAllowed
+                    ? (dateRestriction.reason || `A data de ${selectedDate} possui agenda exclusiva para procedimentos participantes da Black Friday. Selecione outra data no calendário para agendar "${service.title}".`)
+                    : `Esta data é exclusiva para serviços da Black Friday. "${service.title}" é um procedimento participante com acesso liberado aos horários.`}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Horários Disponíveis ou Card de Encaixe Especial */}
           {!isDayOpen ? (

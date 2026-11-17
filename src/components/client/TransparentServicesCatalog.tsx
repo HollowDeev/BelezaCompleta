@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import { ServiceItem } from "@/types/service";
+import { BlackFridayCampaign, BlackFridayCampaignRow } from "@/types/blackFriday";
+import { getServiceBlackFridayPrice } from "@/lib/services/blackFridayPricing";
 import { formatBRL } from "@/lib/utils";
 import {
   Sparkles,
@@ -20,6 +22,7 @@ interface TransparentServicesCatalogProps {
   onSelectService: (service: ServiceItem) => void;
   onOpenMultiServiceSelector?: () => void;
   whatsappNumber?: string;
+  blackFridayCampaign?: BlackFridayCampaign | BlackFridayCampaignRow | null;
 }
 
 export function TransparentServicesCatalog({
@@ -27,9 +30,16 @@ export function TransparentServicesCatalog({
   onSelectService,
   onOpenMultiServiceSelector,
   whatsappNumber = "5511999999999",
+  blackFridayCampaign,
 }: TransparentServicesCatalogProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [expandedDetailsId, setExpandedDetailsId] = useState<string | null>(null);
+
+  const progressiveTiers =
+    (blackFridayCampaign as BlackFridayCampaign)?.progressiveDiscount?.tiers ??
+    (blackFridayCampaign as BlackFridayCampaignRow)?.progressive_discount?.tiers ??
+    [];
+  const hasProgressiveDiscount = Array.isArray(progressiveTiers) && progressiveTiers.length > 0;
 
   const categories = [
     { id: "all", label: "Todos os Procedimentos" },
@@ -213,6 +223,42 @@ export function TransparentServicesCatalog({
           </div>
         )}
 
+        {/* Aviso de Desconto Progressivo Black Friday quando configurado */}
+        {hasProgressiveDiscount && (
+          <div
+            data-testid="bf-progressive-notice"
+            className="mb-8 p-4 sm:p-5 rounded-2xl bg-[#080F0E] text-[#FCF5EB] border border-[#C7A03A]/60 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center shrink-0 border border-[#C7A03A]/40 shadow-xs">
+                <Sparkles className="w-5 h-5 text-[#C7A03A]" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-[#D9B85F] uppercase tracking-wide">
+                    Desconto Progressivo Black Friday
+                  </span>
+                  <span className="text-[10px] bg-[#1D3D3C] text-[#C7A03A] font-bold px-2 py-0.5 rounded-full border border-[#C7A03A]/40">
+                    Bônus Multi-Serviço
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300">
+                  Combine 2 ou mais procedimentos no mesmo dia e receba descontos adicionais automáticos em todo o pacote!
+                </p>
+              </div>
+            </div>
+            {onOpenMultiServiceSelector && (
+              <button
+                type="button"
+                onClick={onOpenMultiServiceSelector}
+                className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-[#C7A03A] to-[#D9B85F] text-[#080F0E] text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all shadow-xs"
+              >
+                Combinar Agora
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Grid de Serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filtered.map((service, serviceIdx) => {
@@ -229,6 +275,13 @@ export function TransparentServicesCatalog({
 
             const includedItems = getIncludedItems(service);
             const isExpanded = expandedDetailsId === service.id;
+
+            // Cálculo dinâmico de precificação Black Friday
+            const bfPricing = blackFridayCampaign
+              ? getServiceBlackFridayPrice(service, blackFridayCampaign)
+              : null;
+            const isBFService = Boolean(bfPricing?.isPromotional);
+            const effectivePrice = isBFService && bfPricing ? bfPricing.finalPrice : (service.promotionalPrice && service.promotionalPrice < service.price ? service.promotionalPrice : service.price);
 
             return (
               <div
@@ -247,9 +300,20 @@ export function TransparentServicesCatalog({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#1D3D3C]/80 via-[#1D3D3C]/10 to-transparent" />
 
-                  {/* Badge de Categoria */}
-                  <div className="absolute top-3 left-3 bg-[#1D3D3C]/90 backdrop-blur-md text-[#C7A03A] border border-[#C7A03A]/40 text-[10px] uppercase font-bold tracking-wider px-3 py-1 rounded-full shadow-md">
-                    {getCategoryLabel(service.category)}
+                  {/* Badge de Categoria e Black Friday */}
+                  <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+                    {isBFService && (
+                      <span
+                        data-testid="service-bf-badge"
+                        className="bg-[#080F0E] text-[#C7A03A] border border-[#C7A03A]/60 font-black text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md flex items-center gap-1"
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-[#C7A03A]" />
+                        <span>BLACK FRIDAY</span>
+                      </span>
+                    )}
+                    <div className="bg-[#1D3D3C]/90 backdrop-blur-md text-[#C7A03A] border border-[#C7A03A]/40 text-[10px] uppercase font-bold tracking-wider px-3 py-1 rounded-full shadow-md">
+                      {getCategoryLabel(service.category)}
+                    </div>
                   </div>
 
                   {/* Duração */}
@@ -264,7 +328,32 @@ export function TransparentServicesCatalog({
                       <span className="text-[10px] uppercase font-semibold text-stone-200 block">
                         Investimento
                       </span>
-                      {service.priceType === "starting_at" ? (
+                      {isBFService && bfPricing ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-[#C7A03A] font-black uppercase tracking-wider">
+                            Oferta Black Friday
+                          </span>
+                          <div className="flex items-baseline space-x-2">
+                            <span
+                              data-testid="service-bf-price"
+                              className="text-2xl sm:text-3xl font-bold font-editorial text-[#C7A03A]"
+                            >
+                              {formatBRL(bfPricing.finalPrice)}
+                            </span>
+                            <span
+                              data-testid="service-original-price"
+                              className="text-xs text-stone-300 line-through"
+                            >
+                              {formatBRL(bfPricing.originalPrice)}
+                            </span>
+                            {bfPricing.discountPercent > 0 && (
+                              <span className="text-[10px] text-amber-300 font-bold bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-500/40">
+                                {Math.round(bfPricing.discountPercent)}% OFF
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : service.priceType === "starting_at" ? (
                         <div className="flex flex-col">
                           <span className="text-[10px] text-[#C7A03A] font-bold uppercase tracking-wider">
                             A partir de
@@ -364,7 +453,7 @@ export function TransparentServicesCatalog({
                     </button>
 
                     <a
-                      href={`https://wa.me/${whatsappNumber}?text=Olá%20Gleicy!%20Tenho%20dúvidas%20sobre%20*${encodeURIComponent(service.title)}*%20(${service.priceType === "starting_at" ? "a partir de " : ""}${service.promotionalPrice && service.promotionalPrice < service.price ? formatBRL(service.promotionalPrice) : formatBRL(service.price)}).`}
+                      href={`https://wa.me/${whatsappNumber}?text=Olá%20Gleicy!%20Tenho%20dúvidas%20sobre%20*${encodeURIComponent(service.title)}*%20(${service.priceType === "starting_at" ? "a partir de " : ""}${formatBRL(effectivePrice)}).`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-2.5 px-3 rounded-xl bg-white border border-[#D8D0BD] text-[#736455] hover:text-[#1D3D3C] hover:bg-[#F0EFE3] text-xs font-semibold transition-all flex items-center justify-center space-x-2"

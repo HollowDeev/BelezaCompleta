@@ -1,5 +1,6 @@
 export * from "./appointment";
 export * from "./availability";
+export * from "./blackFriday";
 export * from "./client";
 export * from "./proposal";
 export * from "./salon";

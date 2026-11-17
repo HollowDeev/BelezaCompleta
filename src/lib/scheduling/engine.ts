@@ -1,6 +1,7 @@
 import { ServiceItem, ServiceStep } from "@/types/service";
 import { Appointment, ScheduledStepBlock } from "@/types/appointment";
 import { ProposalTechnicalStep } from "@/types/proposal";
+import { BlackFridayCampaign, BlackFridayCampaignRow } from "@/types/blackFriday";
 import { formatTimeHHmm, parseHHmmToMinutes } from "@/lib/utils";
 
 export interface AvailableSlot {
@@ -118,6 +119,77 @@ export interface DaySlotItem {
   stepBlocks?: ScheduledStepBlock[];
 }
 
+export interface ScheduleRestrictionResult {
+  isAllowed: boolean;
+  isRestrictedDate: boolean;
+  reason?: string;
+}
+
+/**
+ * Valida se um serviço pode ser agendado em uma determinada data com base nas
+ * restrições da campanha Black Friday ativa.
+ */
+export function validateServiceDateRestriction(
+  service: Pick<ServiceItem, "id" | "title"> & { procedures?: any[] },
+  date: string,
+  campaign?: BlackFridayCampaign | BlackFridayCampaignRow | null
+): ScheduleRestrictionResult {
+  const normDate = (date || "").split("T")[0];
+  if (!campaign) {
+    return { isAllowed: true, isRestrictedDate: false };
+  }
+
+  const isActive = (campaign as BlackFridayCampaign).isActive ?? (campaign as BlackFridayCampaignRow).is_active;
+  const restrictSchedule =
+    (campaign as BlackFridayCampaign).restrictSchedule ?? (campaign as BlackFridayCampaignRow).restrict_schedule;
+
+  if (!isActive || !restrictSchedule) {
+    return { isAllowed: true, isRestrictedDate: false };
+  }
+
+  const rawDates =
+    (campaign as BlackFridayCampaign).restrictedDates ?? (campaign as BlackFridayCampaignRow).restricted_dates ?? [];
+  const restrictedDates = (Array.isArray(rawDates) ? rawDates : []).map((d: any) =>
+    (typeof d === "string" ? d.split("T")[0] : "")
+  );
+
+  if (!restrictedDates.includes(normDate)) {
+    return { isAllowed: true, isRestrictedDate: false };
+  }
+
+  const rawConfigs =
+    (campaign as BlackFridayCampaign).servicesConfig ?? (campaign as BlackFridayCampaignRow).services_config ?? [];
+  const configs: any[] = Array.isArray(rawConfigs) ? rawConfigs : [];
+  const participatingIds = new Set(
+    configs.map((sc: any) => sc.serviceId ?? sc.service_id)
+  );
+
+  if (service.procedures && Array.isArray(service.procedures) && service.procedures.length > 0) {
+    const nonParticipating = service.procedures.filter(
+      (p: any) => !participatingIds.has(p.id ?? p.serviceId)
+    );
+    if (nonParticipating.length > 0) {
+      const titles = nonParticipating.map((p: any) => `"${p.title || p.serviceTitle || p.id}"`).join(", ");
+      return {
+        isAllowed: false,
+        isRestrictedDate: true,
+        reason: `A data selecionada (${normDate}) é exclusiva para procedimentos da Black Friday. O(s) serviço(s) ${titles} não participa(m) da campanha.`,
+      };
+    }
+    return { isAllowed: true, isRestrictedDate: true };
+  }
+
+  if (!participatingIds.has(service.id)) {
+    return {
+      isAllowed: false,
+      isRestrictedDate: true,
+      reason: `A data selecionada (${normDate}) possui agenda exclusiva para serviços Black Friday. O serviço "${service.title || service.id}" não faz parte da campanha promocional.`,
+    };
+  }
+
+  return { isAllowed: true, isRestrictedDate: true };
+}
+
 export interface SalonScheduleConfig {
   openMinutes?: number; // 08:30 (510 min)
   closeMinutes?: number; // 19:00 (1140 min)
@@ -125,6 +197,7 @@ export interface SalonScheduleConfig {
   maxParallelInPause?: number;
   breakStartMinutes?: number; // Pausa de almoço início em minutos
   breakEndMinutes?: number; // Pausa de almoço fim em minutos
+  blackFridayCampaign?: BlackFridayCampaign | BlackFridayCampaignRow | null;
 }
 
 /**
@@ -195,6 +268,23 @@ export function calculateDaySlotGrid(
 
   const sortedCandidates = Array.from(candidateMinutesSet).sort((a, b) => a - b);
   const grid: DaySlotItem[] = [];
+
+  const restriction = validateServiceDateRestriction(
+    service,
+    date,
+    salonConfig.blackFridayCampaign
+  );
+
+  if (!restriction.isAllowed && restriction.isRestrictedDate) {
+    return sortedCandidates.map((candidateStart) => ({
+      time: formatTimeHHmm(candidateStart),
+      endTime: formatTimeHHmm(candidateStart + totalDuration),
+      status: "occupied" as const,
+      isAvailable: false,
+      isEncaixe: false,
+      conflictReason: restriction.reason || "Data exclusiva para serviços da Black Friday",
+    }));
+  }
 
   for (const candidateStart of sortedCandidates) {
     // 1. Checa se o horário já passou hoje
@@ -367,6 +457,10 @@ export function validateProposalScheduleFeasibility({
   ignoreAppointmentId,
   ignoreTriageSubmissionId,
   professionalId = "all",
+  service,
+  serviceId,
+  serviceTitle,
+  blackFridayCampaign,
 }: {
   date: string;
   startTime: string;
@@ -376,6 +470,10 @@ export function validateProposalScheduleFeasibility({
   ignoreAppointmentId?: string;
   ignoreTriageSubmissionId?: string;
   professionalId?: string;
+  service?: Pick<ServiceItem, "id" | "title"> & { procedures?: any[] };
+  serviceId?: string;
+  serviceTitle?: string;
+  blackFridayCampaign?: BlackFridayCampaign | BlackFridayCampaignRow | null;
 }): ProposalFeasibilityResult {
   if (!startTime || !date || !technicalSteps || technicalSteps.length === 0) {
     return {
@@ -409,6 +507,22 @@ export function validateProposalScheduleFeasibility({
   );
   const endMin = startMin + totalDuration;
   const endTimeStr = formatTimeHHmm(endMin);
+
+  const effectiveCampaign = blackFridayCampaign ?? salonConfig?.blackFridayCampaign;
+  const effectiveService =
+    service ?? (serviceId ? ({ id: serviceId, title: serviceTitle || "Serviço da Proposta" } as any) : undefined);
+
+  if (effectiveCampaign && effectiveService) {
+    const restriction = validateServiceDateRestriction(effectiveService, date, effectiveCampaign);
+    if (!restriction.isAllowed && restriction.isRestrictedDate) {
+      return {
+        isFeasible: false,
+        conflictReason: restriction.reason || "Data exclusiva para procedimentos da Black Friday.",
+        totalDurationMin: totalDuration,
+        endTime: endTimeStr,
+      };
+    }
+  }
 
   if (startMin < config.openMinutes) {
     return {

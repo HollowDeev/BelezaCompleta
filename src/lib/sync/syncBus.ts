@@ -9,7 +9,8 @@ export type GlaicySyncEventType =
   | "proposal_saved"
   | "proposal_approved"
   | "appointment_saved"
-  | "client_saved";
+  | "client_saved"
+  | "black_friday_campaign_saved";
 
 export interface GlaicySyncPayload {
   type: GlaicySyncEventType;

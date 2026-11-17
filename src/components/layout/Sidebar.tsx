@@ -31,7 +31,8 @@ export type AdminTab =
   | "modelos-triagem"
   | "financeiro"
   | "configuracoes"
-  | "saas";
+  | "saas"
+  | "black-friday";
 
 interface SidebarProps {
   currentTab: AdminTab;
@@ -74,6 +75,13 @@ export function Sidebar({
       icon: CalendarCheck,
       badge: pendingPreReservationsCount > 0 ? `${pendingPreReservationsCount}` : undefined,
       badgeColor: "bg-[#FCF9F0] text-[#80611F] border border-[#C7A03A]/60 font-bold animate-pulse",
+    },
+    {
+      id: "black-friday" as AdminTab,
+      label: "Black Friday",
+      icon: Sparkles,
+      badge: "Campanha",
+      badgeColor: "bg-[#080F0E] text-[#C7A03A] border border-[#C7A03A]/40 font-bold",
     },
     {
       id: "triagens" as AdminTab,
