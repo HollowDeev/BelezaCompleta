@@ -32,12 +32,57 @@ import {
   CalendarCheck,
   ShieldCheck,
   Sliders,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 
 export interface BlackFridayManagerProps {
   organization: SalonOrganization | null;
   services: ServiceItem[];
   onRefresh?: () => void;
+}
+
+const MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function formatDisplayDateOnly(dateStr?: string): string {
+  if (!dateStr) return "";
+  try {
+    const [y, m, d] = dateStr.split("-");
+    if (!y || !m || !d) return dateStr;
+    return `${d}/${m}/${y}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatDisplayDateTime(dt?: string): string {
+  if (!dt) return "";
+  try {
+    const [dPart, tPart] = dt.split("T");
+    if (!dPart) return "";
+    const [y, m, d] = dPart.split("-");
+    return `${d}/${m}/${y}${tPart ? ` às ${tPart}` : ""}`;
+  } catch {
+    return dt;
+  }
 }
 
 function toDateTimeLocal(isoString?: string | null): string {
@@ -84,6 +129,31 @@ export function BlackFridayManager({
   const [restrictedDates, setRestrictedDates] = useState<string[]>([]);
   const [newRestrictedDate, setNewRestrictedDate] = useState("");
 
+  // Accordion toggle states
+  const [isPeriodAccordionOpen, setIsPeriodAccordionOpen] = useState(true);
+  const [isScheduleAccordionOpen, setIsScheduleAccordionOpen] = useState(false);
+
+  // Month navigation for calendars
+  const [periodYearMonth, setPeriodYearMonth] = useState<{ year: number; month: number }>(() => {
+    return { year: 2026, month: 11 };
+  });
+  const [scheduleYearMonth, setScheduleYearMonth] = useState<{ year: number; month: number }>(() => {
+    return { year: 2026, month: 11 };
+  });
+
+  // Time inputs for period range
+  const [startTime, setStartTime] = useState("00:00");
+  const [endTime, setEndTime] = useState("23:59");
+  const [todayStr, setTodayStr] = useState("");
+
+  useEffect(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    setTodayStr(`${y}-${m}-${day}`);
+  }, []);
+
   // Progressive discounts
   const [hasProgressive, setHasProgressive] = useState(false);
   const [progressiveTiers, setProgressiveTiers] = useState<ProgressiveDiscountTier[]>([]);
@@ -123,8 +193,27 @@ export function BlackFridayManager({
           setCampaignId(campaign.id);
           setName(campaign.name || "Black Friday");
           setIsActive(Boolean(campaign.isActive));
-          setStartsAt(toDateTimeLocal(campaign.startsAt));
-          setEndsAt(toDateTimeLocal(campaign.endsAt));
+          const loadedStartsAt = toDateTimeLocal(campaign.startsAt);
+          const loadedEndsAt = toDateTimeLocal(campaign.endsAt);
+          setStartsAt(loadedStartsAt);
+          setEndsAt(loadedEndsAt);
+          if (loadedStartsAt) {
+            const [dPart, tPart] = loadedStartsAt.split("T");
+            if (tPart) setStartTime(tPart);
+            if (dPart) {
+              const [y, m] = dPart.split("-");
+              if (y && m) {
+                const parsedYear = parseInt(y, 10);
+                const parsedMonth = parseInt(m, 10);
+                setPeriodYearMonth({ year: parsedYear, month: parsedMonth });
+                setScheduleYearMonth({ year: parsedYear, month: parsedMonth });
+              }
+            }
+          }
+          if (loadedEndsAt) {
+            const [, tPart] = loadedEndsAt.split("T");
+            if (tPart) setEndTime(tPart);
+          }
           setRestrictSchedule(Boolean(campaign.restrictSchedule));
           setRestrictedDates(campaign.restrictedDates || []);
 
@@ -231,6 +320,131 @@ export function BlackFridayManager({
   // Handler: Remove restricted date
   const handleRemoveRestrictedDate = (dateToRemove: string) => {
     setRestrictedDates((prev) => prev.filter((d) => d !== dateToRemove));
+  };
+
+  // Split dates for range comparison
+  const startDateOnly = useMemo(() => {
+    return startsAt ? startsAt.split("T")[0] || "" : "";
+  }, [startsAt]);
+
+  const endDateOnly = useMemo(() => {
+    return endsAt ? endsAt.split("T")[0] || "" : "";
+  }, [endsAt]);
+
+  // Handler: Click a date in the Period calendar
+  const handleSelectPeriodDay = (dateStr: string) => {
+    if (!startDateOnly || (startDateOnly && endDateOnly)) {
+      setStartsAt(`${dateStr}T${startTime || "00:00"}`);
+      setEndsAt("");
+    } else {
+      if (dateStr < startDateOnly) {
+        setStartsAt(`${dateStr}T${startTime || "00:00"}`);
+      } else {
+        setEndsAt(`${dateStr}T${endTime || "23:59"}`);
+      }
+    }
+  };
+
+  const handleSetQuickPeriod = (startD: string, endD: string) => {
+    setStartsAt(`${startD}T${startTime || "00:00"}`);
+    setEndsAt(`${endD}T${endTime || "23:59"}`);
+    const [y, m] = startD.split("-");
+    if (y && m) {
+      setPeriodYearMonth({ year: parseInt(y, 10), month: parseInt(m, 10) });
+    }
+  };
+
+  const handleStartTimeChange = (val: string) => {
+    setStartTime(val);
+    if (startDateOnly) {
+      setStartsAt(`${startDateOnly}T${val || "00:00"}`);
+    }
+  };
+
+  const handleEndTimeChange = (val: string) => {
+    setEndTime(val);
+    if (endDateOnly) {
+      setEndsAt(`${endDateOnly}T${val || "23:59"}`);
+    }
+  };
+
+  // Toggle restricted date
+  const handleToggleRestrictedDate = (dateStr: string) => {
+    setRestrictedDates((prev) => {
+      if (prev.includes(dateStr)) {
+        return prev.filter((d) => d !== dateStr);
+      }
+      return [...prev, dateStr].sort();
+    });
+  };
+
+  // Copy period dates to restricted dates
+  const handleCopyPeriodToRestricted = () => {
+    if (!startDateOnly) {
+      setFeedbackMsg({
+        type: "error",
+        text: "Defina o período de vigência da Black Friday primeiro.",
+      });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+      return;
+    }
+    const end = endDateOnly || startDateOnly;
+    const startObj = new Date(`${startDateOnly}T12:00:00`);
+    const endObj = new Date(`${end}T12:00:00`);
+    const newDates = new Set(restrictedDates);
+
+    const curr = new Date(startObj);
+    while (curr <= endObj) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, "0");
+      const d = String(curr.getDate()).padStart(2, "0");
+      newDates.add(`${y}-${m}-${d}`);
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    setRestrictedDates(Array.from(newDates).sort());
+    setRestrictSchedule(true);
+    setFeedbackMsg({
+      type: "success",
+      text: `${newDates.size} datas copiadas para a agenda exclusiva da Black Friday!`,
+    });
+    setTimeout(() => setFeedbackMsg(null), 3500);
+  };
+
+  // Select Tuesday to Saturday for current schedule month
+  const handleSelectTuesdayToSaturday = () => {
+    const { year, month } = scheduleYearMonth;
+    const daysCount = new Date(year, month, 0).getDate();
+    const newDates = new Set(restrictedDates);
+
+    for (let day = 1; day <= daysCount; day++) {
+      const dt = new Date(year, month - 1, day);
+      const dayOfWeek = dt.getDay(); // 0 Dom, 1 Seg, 2 Ter, 3 Qua, 4 Qui, 5 Sex, 6 Sab
+      if (dayOfWeek >= 2 && dayOfWeek <= 6) {
+        const padM = String(month).padStart(2, "0");
+        const padD = String(day).padStart(2, "0");
+        newDates.add(`${year}-${padM}-${padD}`);
+      }
+    }
+
+    setRestrictedDates(Array.from(newDates).sort());
+    setRestrictSchedule(true);
+  };
+
+  // Select all month for schedule
+  const handleSelectWholeMonthSchedule = () => {
+    const { year, month } = scheduleYearMonth;
+    const daysCount = new Date(year, month, 0).getDate();
+    const newDates = new Set(restrictedDates);
+
+    for (let day = 1; day <= daysCount; day++) {
+      const padM = String(month).padStart(2, "0");
+      const padD = String(day).padStart(2, "0");
+      newDates.add(`${year}-${padM}-${padD}`);
+    }
+
+    setRestrictedDates(Array.from(newDates).sort());
+    setRestrictSchedule(true);
   };
 
   // Handler: Add progressive discount tier
@@ -575,159 +789,735 @@ export function BlackFridayManager({
         </div>
       </div>
 
-      {/* Basic Settings: Name & Validity Range */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-        <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#D8D0BD] space-y-1.5">
+      {/* Campaign Name & General Settings */}
+      <div className="bg-[#FAF7F2] p-4 sm:p-5 rounded-2xl border border-[#D8D0BD] relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1 space-y-1">
           <label className="text-xs font-bold text-[#1D3D3C] flex items-center space-x-1.5">
             <Tag className="w-3.5 h-3.5 text-[#C7A03A]" />
-            <span>Nome da Campanha</span>
+            <span>Nome Oficial da Campanha</span>
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ex: Black Friday 2026"
-            className="w-full px-3 py-2 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-medium text-[#1D3D3C]"
+            className="w-full px-3.5 py-2 text-xs sm:text-sm bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-bold text-[#1D3D3C]"
           />
-          <p className="text-[10px] text-[#736455]">
-            Nome exibido nos relatórios e nos banners temáticos.
+          <p className="text-[11px] text-[#736455]">
+            Identificação utilizada nos relatórios, banners na home e contagem regressiva da campanha.
           </p>
         </div>
 
-        <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#D8D0BD] space-y-1.5">
-          <label className="text-xs font-bold text-[#1D3D3C] flex items-center space-x-1.5">
-            <Clock className="w-3.5 h-3.5 text-[#C7A03A]" />
-            <span>Início das Ofertas</span>
-          </label>
-          <input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            className="w-full px-3 py-2 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-medium text-[#1D3D3C]"
-          />
-          <p className="text-[10px] text-[#736455]">
-            Data e horário em que os preços Black Friday entram em vigor.
-          </p>
-        </div>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          <div className="px-3.5 py-2 rounded-xl bg-white border border-[#D8D0BD] flex items-center space-x-2 text-xs">
+            <Clock className="w-4 h-4 text-[#C7A03A]" />
+            <span className="text-[#736455]">Vigência:</span>
+            <span className="font-bold text-[#1D3D3C]">
+              {startsAt && endsAt
+                ? `${formatDisplayDateOnly(startDateOnly)} a ${formatDisplayDateOnly(endDateOnly)}`
+                : "Não definida"}
+            </span>
+          </div>
 
-        <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#D8D0BD] space-y-1.5">
-          <label className="text-xs font-bold text-[#1D3D3C] flex items-center space-x-1.5">
-            <Clock className="w-3.5 h-3.5 text-[#C7A03A]" />
-            <span>Término das Ofertas</span>
-          </label>
-          <input
-            type="datetime-local"
-            value={endsAt}
-            onChange={(e) => setEndsAt(e.target.value)}
-            className={`w-full px-3 py-2 text-xs bg-white border rounded-xl focus:outline-hidden font-medium text-[#1D3D3C] ${
-              dateRangeError ? "border-rose-400 focus:border-rose-500" : "border-[#D8D0BD] focus:border-[#C7A03A]"
-            }`}
-          />
-          {dateRangeError ? (
-            <p className="text-[10px] text-rose-600 font-semibold">{dateRangeError}</p>
-          ) : (
-            <p className="text-[10px] text-[#736455]">
-              Contagem regressiva no topo do site apontará para este término.
-            </p>
-          )}
+          <div className="px-3.5 py-2 rounded-xl bg-white border border-[#D8D0BD] flex items-center space-x-2 text-xs">
+            <CalendarCheck className="w-4 h-4 text-[#C7A03A]" />
+            <span className="text-[#736455]">Datas exclusivas:</span>
+            <span className="font-bold text-[#1D3D3C]">
+              {restrictSchedule ? `${restrictedDates.length} data(s)` : "Livre"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Schedule Restriction Section */}
-      <div className="bg-[#FAF7F2] p-4 sm:p-6 rounded-2xl border border-[#D8D0BD] relative z-10 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#1D3D3C] text-[#D9B85F] flex items-center justify-center shrink-0">
-              <CalendarCheck className="w-4 h-4" />
+      {/* ============================================================== */}
+      {/* ACCORDION 1: PERÍODO DE VIGÊNCIA (CALENDÁRIO GAMIFICADO)       */}
+      {/* ============================================================== */}
+      <div className="bg-[#FAF7F2] rounded-2xl border border-[#D8D0BD] overflow-hidden relative z-10 shadow-xs transition-all">
+        {/* Accordion Header */}
+        <div
+          onClick={() => setIsPeriodAccordionOpen((prev) => !prev)}
+          className="p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:bg-[#FAF7F2]/80 transition-colors select-none"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-[#1D3D3C] text-[#D9B85F] flex items-center justify-center shrink-0 border border-[#C7A03A]/40 shadow-xs">
+              <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-[#1D3D3C]">
-                Restrição Exclusiva de Agenda
-              </h3>
-              <p className="text-xs text-[#736455]">
-                Bloqueie datas do salão para atendimento exclusivo dos serviços Black Friday.
+              <div className="flex items-center space-x-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-extrabold text-[#1D3D3C]">
+                  1. Período de Vigência das Ofertas
+                </h3>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#C7A03A]/20 text-[#80611F] border border-[#C7A03A]/40">
+                  Seleção por Intervalo
+                </span>
+              </div>
+              <p className="text-xs text-[#736455] mt-0.5">
+                Defina interativamente quando os preços com desconto e contadores entram no ar.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-[#1D3D3C]">
-              {restrictSchedule ? "Restrição Ativada" : "Agenda Aberta Normal"}
-            </span>
+          <div className="flex items-center space-x-3">
+            {/* Status chip */}
+            {startsAt && endsAt ? (
+              <span className="hidden md:inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>
+                  {formatDisplayDateTime(startsAt)} até {formatDisplayDateTime(endsAt)}
+                </span>
+              </span>
+            ) : startsAt ? (
+              <span className="hidden md:inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-xs font-semibold">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Início: {formatDisplayDateTime(startsAt)} (selecione o término)</span>
+              </span>
+            ) : (
+              <span className="hidden md:inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-stone-100 border border-stone-300 text-stone-700 text-xs font-medium">
+                <AlertCircle className="w-3.5 h-3.5 text-stone-500" />
+                <span>Nenhum período definido</span>
+              </span>
+            )}
+
             <button
               type="button"
-              role="switch"
-              aria-checked={restrictSchedule}
-              onClick={() => setRestrictSchedule(!restrictSchedule)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                restrictSchedule ? "bg-[#1D3D3C]" : "bg-stone-300"
-              }`}
+              className="w-8 h-8 rounded-xl bg-white border border-[#D8D0BD] flex items-center justify-center text-[#1D3D3C] hover:border-[#C7A03A] transition-colors"
+              aria-label={isPeriodAccordionOpen ? "Recolher calendário de vigência" : "Expandir calendário de vigência"}
             >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  restrictSchedule ? "translate-x-5 bg-[#C7A03A]" : "translate-x-0"
-                }`}
-              />
+              {isPeriodAccordionOpen ? (
+                <ChevronUp className="w-4 h-4 text-[#C7A03A]" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[#736455]" />
+              )}
             </button>
           </div>
         </div>
 
-        {restrictSchedule && (
-          <div className="pt-3 border-t border-[#D8D0BD]/60 space-y-4">
-            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 text-xs text-amber-900 flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        {/* Accordion Content */}
+        {isPeriodAccordionOpen && (
+          <div className="p-4 sm:p-6 border-t border-[#D8D0BD] bg-white/70 space-y-5 animate-in fade-in-50 duration-200">
+            {/* Top Bar: Month navigation + Quick presets */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#FAF7F2] p-3 sm:p-4 rounded-2xl border border-[#D8D0BD]">
+              {/* Navegação entre Meses */}
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center bg-white rounded-xl border border-[#D8D0BD] p-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPeriodYearMonth((prev) => {
+                        if (prev.month === 1) return { year: prev.year - 1, month: 12 };
+                        return { year: prev.year, month: prev.month - 1 };
+                      });
+                    }}
+                    className="p-1.5 sm:p-2 rounded-lg hover:bg-[#FAF7F2] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
+                    title="Mês Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 sm:px-4 text-xs sm:text-sm font-bold text-[#1D3D3C] min-w-[130px] sm:min-w-[150px] text-center">
+                    {MONTH_NAMES[periodYearMonth.month - 1]} {periodYearMonth.year}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPeriodYearMonth((prev) => {
+                        if (prev.month === 12) return { year: prev.year + 1, month: 1 };
+                        return { year: prev.year, month: prev.month + 1 };
+                      });
+                    }}
+                    className="p-1.5 sm:p-2 rounded-lg hover:bg-[#FAF7F2] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
+                    title="Próximo Mês"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date();
+                    setPeriodYearMonth({ year: d.getFullYear(), month: d.getMonth() + 1 });
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-bold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  Hoje
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPeriodYearMonth({ year: 2026, month: 11 })}
+                  className="px-3 py-2 rounded-xl bg-[#1D3D3C] text-[#D9B85F] hover:bg-[#1D3D3C]/90 border border-[#C7A03A]/40 text-xs font-bold transition-all shadow-xs"
+                >
+                  Novembro
+                </button>
+              </div>
+
+              {/* Atalhos Rápidos de Período */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-[#736455] flex items-center space-x-1">
+                  <Sliders className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>Atalhos:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickPeriod("2026-11-27", "2026-11-29")}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  🔥 Black Friday (27 a 29 Nov)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickPeriod("2026-11-23", "2026-11-30")}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  ⚡ Black Week (23 a 30 Nov)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickPeriod("2026-11-01", "2026-11-30")}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  🗓️ Mês Inteiro
+                </button>
+                {(startsAt || endsAt) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStartsAt("");
+                      setEndsAt("");
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-600 transition-all shadow-xs"
+                  >
+                    ✕ Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Instruction tooltip */}
+            <div className="flex items-center space-x-2 text-xs text-[#736455] bg-[#FCF5EB] px-3.5 py-2 rounded-xl border border-[#D8D0BD]/60">
+              <Sparkles className="w-4 h-4 text-[#C7A03A] shrink-0" />
               <span>
-                <strong>Aviso de Restrição:</strong> Em datas restritas, apenas serviços
-                participantes da Black Friday poderão ser agendados. Serviços fora da promoção
-                serão bloqueados no motor de agendamento nessas datas.
+                <strong>Como selecionar:</strong> Clique no primeiro dia para marcar o <strong>Início</strong> e em seguida clique no dia final para o <strong>Término</strong>. Os dias intermediários serão preenchidos automaticamente.
               </span>
             </div>
 
-            {/* Date input picker + Add button */}
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={newRestrictedDate}
-                onChange={(e) => setNewRestrictedDate(e.target.value)}
-                className="px-3 py-2 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-medium text-[#1D3D3C]"
-              />
+            {/* Calendário: Grid de Dias da Semana e Mês */}
+            <div className="space-y-2">
+              {/* Cabeçalho dos dias da semana */}
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-xs font-bold text-[#80611F] tracking-wider uppercase mb-1">
+                {WEEK_DAYS.map((wd, i) => (
+                  <span
+                    key={wd}
+                    className={`py-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/50 ${
+                      i === 0 || i === 6 ? "text-[#736455]/70" : "text-[#736455]"
+                    }`}
+                  >
+                    {wd}
+                  </span>
+                ))}
+              </div>
+
+              {/* Grid dos Dias */}
+              {(() => {
+                const year = periodYearMonth.year;
+                const month = periodYearMonth.month;
+                const startDayOffset = new Date(year, month - 1, 1).getDay();
+                const daysInMonth = new Date(year, month, 0).getDate();
+
+                return (
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                    {/* Espaços Vazios para o Offset Inicial do Mês */}
+                    {[...Array(startDayOffset)].map((_, i) => (
+                      <div
+                        key={`empty-period-${i}`}
+                        className="h-16 sm:h-20 rounded-xl bg-[#FAF7F2]/40 border border-[#D8D0BD]/30 pointer-events-none"
+                      />
+                    ))}
+
+                    {/* Cards dos Dias */}
+                    {[...Array(daysInMonth)].map((_, i) => {
+                      const dayNum = i + 1;
+                      const padDay = String(dayNum).padStart(2, "0");
+                      const padMonth = String(month).padStart(2, "0");
+                      const dateStr = `${year}-${padMonth}-${padDay}`;
+
+                      const isStart = dateStr === startDateOnly;
+                      const isEnd = dateStr === endDateOnly;
+                      const isInRange = Boolean(
+                        startDateOnly &&
+                          endDateOnly &&
+                          dateStr > startDateOnly &&
+                          dateStr < endDateOnly
+                      );
+                      const isToday = Boolean(todayStr && dateStr === todayStr);
+
+                      let cellStyles =
+                        "bg-white border-[#D8D0BD] text-[#1D3D3C] hover:border-[#C7A03A] hover:bg-[#FCF5EB] shadow-2xs";
+
+                      if (isStart || isEnd) {
+                        cellStyles =
+                          "bg-[#1D3D3C] border-2 border-[#C7A03A] text-white ring-2 ring-[#C7A03A]/40 shadow-md shadow-[#1D3D3C]/20 scale-[1.02] z-10";
+                      } else if (isInRange) {
+                        cellStyles =
+                          "bg-[#C7A03A]/20 border-y-2 border-y-[#C7A03A]/60 border-x-transparent text-[#1D3D3C] font-black rounded-none";
+                      } else if (isToday) {
+                        cellStyles += " ring-2 ring-[#C7A03A]/60 border-[#C7A03A]";
+                      }
+
+                      return (
+                        <div
+                          key={dateStr}
+                          onClick={() => handleSelectPeriodDay(dateStr)}
+                          className={`relative h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl border text-left cursor-pointer transition-all duration-150 flex flex-col justify-between select-none group touch-manipulation ${cellStyles}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-xs sm:text-sm font-extrabold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
+                                isStart || isEnd
+                                  ? "bg-[#C7A03A] text-[#1D3D3C]"
+                                  : isInRange
+                                  ? "text-[#1D3D3C]"
+                                  : isToday
+                                  ? "bg-[#C7A03A]/20 text-[#80611F] border border-[#C7A03A]/60"
+                                  : "text-[#1D3D3C] group-hover:text-[#80611F]"
+                              }`}
+                            >
+                              {dayNum}
+                            </span>
+
+                            {isToday && !(isStart || isEnd) && (
+                              <span className="hidden sm:inline-block text-[9px] font-bold text-[#80611F]">
+                                Hoje
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-center">
+                            {isStart && isEnd ? (
+                              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#C7A03A] text-[#1D3D3C] whitespace-nowrap shadow-xs">
+                                Início & Fim
+                              </span>
+                            ) : isStart ? (
+                              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#C7A03A] text-[#1D3D3C] whitespace-nowrap shadow-xs">
+                                Início
+                              </span>
+                            ) : isEnd ? (
+                              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#C7A03A] text-[#1D3D3C] whitespace-nowrap shadow-xs">
+                                Término
+                              </span>
+                            ) : isInRange ? (
+                              <span className="text-[9px] font-bold text-[#80611F] hidden sm:inline-block">
+                                Promoção Ativa
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Bottom Controls: Exact Hours & Manual Adjustment */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-[#D8D0BD]/70">
+              <div className="bg-[#FAF7F2] p-3 sm:p-4 rounded-xl border border-[#D8D0BD] space-y-1.5">
+                <label className="text-xs font-bold text-[#1D3D3C] flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>Horário de Início</span>
+                </label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-bold text-[#1D3D3C]"
+                />
+                <p className="text-[10px] text-[#736455]">
+                  Data selecionada: {startDateOnly ? formatDisplayDateOnly(startDateOnly) : "Não definida"}
+                </p>
+              </div>
+
+              <div className="bg-[#FAF7F2] p-3 sm:p-4 rounded-xl border border-[#D8D0BD] space-y-1.5">
+                <label className="text-xs font-bold text-[#1D3D3C] flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>Horário de Término</span>
+                </label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => handleEndTimeChange(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-bold text-[#1D3D3C]"
+                />
+                <p className="text-[10px] text-[#736455]">
+                  Data selecionada: {endDateOnly ? formatDisplayDateOnly(endDateOnly) : "Não definida"}
+                </p>
+              </div>
+
+              <div className="bg-[#FAF7F2] p-3 sm:p-4 rounded-xl border border-[#D8D0BD] flex flex-col justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[#1D3D3C] block mb-1">
+                    Resumo do Período de Vigência
+                  </span>
+                  <p className="text-xs text-[#736455]">
+                    {startsAt && endsAt ? (
+                      <>
+                        De <strong className="text-[#1D3D3C]">{formatDisplayDateTime(startsAt)}</strong> até{" "}
+                        <strong className="text-[#1D3D3C]">{formatDisplayDateTime(endsAt)}</strong>.
+                      </>
+                    ) : (
+                      "Selecione as datas no calendário para completar o período."
+                    )}
+                  </p>
+                </div>
+
+                {dateRangeError && (
+                  <p className="text-[10px] text-rose-600 font-bold mt-2 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{dateRangeError}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================== */}
+      {/* ACCORDION 2: DATAS EXCLUSIVAS DE ATENDIMENTO NA AGENDA         */}
+      {/* ============================================================== */}
+      <div className="bg-[#FAF7F2] rounded-2xl border border-[#D8D0BD] overflow-hidden relative z-10 shadow-xs transition-all">
+        {/* Accordion Header */}
+        <div className="p-4 sm:p-5 flex items-center justify-between select-none">
+          <div
+            onClick={() => setIsScheduleAccordionOpen((prev) => !prev)}
+            className="flex-1 flex items-center space-x-3 cursor-pointer hover:opacity-90 transition-opacity"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#1D3D3C] text-[#D9B85F] flex items-center justify-center shrink-0 border border-[#C7A03A]/40 shadow-xs">
+              <CalendarCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-extrabold text-[#1D3D3C]">
+                  2. Restrição Exclusiva de Agenda (Datas Especiais)
+                </h3>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#1D3D3C] text-[#D9B85F] border border-[#C7A03A]/40">
+                  {restrictSchedule ? `${restrictedDates.length} Data(s) Reservada(s)` : "Opcional (Desativado)"}
+                </span>
+              </div>
+              <p className="text-xs text-[#736455] mt-0.5">
+                Reserve dias específicos no salão onde somente serviços participantes da Black Friday poderão ser agendados.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 ml-3">
+            {/* Direct Switch in Header */}
+            <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-xl border border-[#D8D0BD]">
+              <span className="text-xs font-bold text-[#1D3D3C] hidden sm:inline-block">
+                {restrictSchedule ? "Ativado" : "Desativado"}
+              </span>
               <button
                 type="button"
-                onClick={handleAddRestrictedDate}
-                disabled={!newRestrictedDate}
-                className="px-3.5 py-2 text-xs font-bold text-[#1D3D3C] gold-gradient rounded-xl shadow-xs hover:brightness-105 active:scale-95 transition-all flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                role="switch"
+                aria-checked={restrictSchedule}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRestrictSchedule(!restrictSchedule);
+                  if (!restrictSchedule) {
+                    setIsScheduleAccordionOpen(true);
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                  restrictSchedule ? "bg-[#1D3D3C]" : "bg-stone-300"
+                }`}
+                title={restrictSchedule ? "Desativar restrição de agenda" : "Ativar restrição de agenda"}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Adicionar Data</span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    restrictSchedule ? "translate-x-5 bg-[#C7A03A]" : "translate-x-0"
+                  }`}
+                />
               </button>
             </div>
 
-            {/* Tag chip list of restricted dates */}
-            <div>
-              <span className="text-[11px] font-bold text-[#80611F] uppercase tracking-wider block mb-2">
-                Datas com Agenda Restrita ({restrictedDates.length})
-              </span>
-              {restrictedDates.length === 0 ? (
-                <p className="text-xs text-stone-500 italic">
-                  Nenhuma data restrita cadastrada. Adicione uma data acima.
-                </p>
+            <button
+              type="button"
+              onClick={() => setIsScheduleAccordionOpen((prev) => !prev)}
+              className="w-8 h-8 rounded-xl bg-white border border-[#D8D0BD] flex items-center justify-center text-[#1D3D3C] hover:border-[#C7A03A] transition-colors cursor-pointer"
+              aria-label={isScheduleAccordionOpen ? "Recolher datas exclusivas" : "Expandir datas exclusivas"}
+            >
+              {isScheduleAccordionOpen ? (
+                <ChevronUp className="w-4 h-4 text-[#C7A03A]" />
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <ChevronDown className="w-4 h-4 text-[#736455]" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Accordion Content */}
+        {isScheduleAccordionOpen && (
+          <div className="p-4 sm:p-6 border-t border-[#D8D0BD] bg-white/70 space-y-5 animate-in fade-in-50 duration-200">
+            {/* Warning / explanation banner */}
+            <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3.5 text-xs text-amber-900 flex items-start space-x-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-bold">Como funciona a restrição de agenda:</strong>
+                <p className="mt-0.5 text-amber-800">
+                  Nas datas selecionadas abaixo, o motor de agendamento online permitirá apenas o agendamento de procedimentos configurados na Black Friday. Serviços comuns fora da promoção serão bloqueados para reserva nessas datas.
+                </p>
+              </div>
+            </div>
+
+            {/* Top Bar: Month navigation + Quick presets */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#FAF7F2] p-3 sm:p-4 rounded-2xl border border-[#D8D0BD]">
+              {/* Navegação entre Meses */}
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center bg-white rounded-xl border border-[#D8D0BD] p-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScheduleYearMonth((prev) => {
+                        if (prev.month === 1) return { year: prev.year - 1, month: 12 };
+                        return { year: prev.year, month: prev.month - 1 };
+                      });
+                    }}
+                    className="p-1.5 sm:p-2 rounded-lg hover:bg-[#FAF7F2] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
+                    title="Mês Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 sm:px-4 text-xs sm:text-sm font-bold text-[#1D3D3C] min-w-[130px] sm:min-w-[150px] text-center">
+                    {MONTH_NAMES[scheduleYearMonth.month - 1]} {scheduleYearMonth.year}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScheduleYearMonth((prev) => {
+                        if (prev.month === 12) return { year: prev.year + 1, month: 1 };
+                        return { year: prev.year, month: prev.month + 1 };
+                      });
+                    }}
+                    className="p-1.5 sm:p-2 rounded-lg hover:bg-[#FAF7F2] text-[#1D3D3C] hover:text-[#80611F] transition-colors"
+                    title="Próximo Mês"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date();
+                    setScheduleYearMonth({ year: d.getFullYear(), month: d.getMonth() + 1 });
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-bold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  Hoje
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setScheduleYearMonth({ year: 2026, month: 11 })}
+                  className="px-3 py-2 rounded-xl bg-[#1D3D3C] text-[#D9B85F] hover:bg-[#1D3D3C]/90 border border-[#C7A03A]/40 text-xs font-bold transition-all shadow-xs"
+                >
+                  Novembro
+                </button>
+              </div>
+
+              {/* Atalhos Rápidos para Datas Exclusivas */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-[#736455] flex items-center space-x-1">
+                  <Sliders className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>Ações Rápidas:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyPeriodToRestricted}
+                  className="px-3 py-1.5 rounded-xl bg-[#1D3D3C] hover:bg-[#1D3D3C]/90 border border-[#C7A03A]/40 text-xs font-bold text-[#D9B85F] transition-all shadow-xs"
+                  title="Copia todas as datas do período de vigência da Black Friday para a restrição de agenda"
+                >
+                  ✨ Copiar do Período Black
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectTuesdayToSaturday}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  📅 Terça a Sábado
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectWholeMonthSchedule}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C] transition-all hover:border-[#C7A03A] shadow-xs"
+                >
+                  🗓️ Todo o Mês
+                </button>
+                {restrictedDates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRestrictedDates([])}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-600 transition-all shadow-xs"
+                  >
+                    ✕ Limpar ({restrictedDates.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Calendário: Grid de Seleção Gamificada */}
+            <div className="space-y-2">
+              {/* Cabeçalho dos dias da semana */}
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-xs font-bold text-[#80611F] tracking-wider uppercase mb-1">
+                {WEEK_DAYS.map((wd, i) => (
+                  <span
+                    key={wd}
+                    className={`py-2 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]/50 ${
+                      i === 0 || i === 6 ? "text-[#736455]/70" : "text-[#736455]"
+                    }`}
+                  >
+                    {wd}
+                  </span>
+                ))}
+              </div>
+
+              {/* Grid dos Dias */}
+              {(() => {
+                const year = scheduleYearMonth.year;
+                const month = scheduleYearMonth.month;
+                const startDayOffset = new Date(year, month - 1, 1).getDay();
+                const daysInMonth = new Date(year, month, 0).getDate();
+
+                return (
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                    {/* Espaços Vazios para o Offset Inicial do Mês */}
+                    {[...Array(startDayOffset)].map((_, i) => (
+                      <div
+                        key={`empty-schedule-${i}`}
+                        className="h-16 sm:h-20 rounded-xl bg-[#FAF7F2]/40 border border-[#D8D0BD]/30 pointer-events-none"
+                      />
+                    ))}
+
+                    {/* Cards dos Dias */}
+                    {[...Array(daysInMonth)].map((_, i) => {
+                      const dayNum = i + 1;
+                      const padDay = String(dayNum).padStart(2, "0");
+                      const padMonth = String(month).padStart(2, "0");
+                      const dateStr = `${year}-${padMonth}-${padDay}`;
+
+                      const isRestricted = restrictedDates.includes(dateStr);
+                      const isToday = Boolean(todayStr && dateStr === todayStr);
+
+                      let cellStyles =
+                        "bg-white border-[#D8D0BD] text-[#1D3D3C] hover:border-[#C7A03A] hover:bg-[#FCF5EB] shadow-2xs";
+
+                      if (isRestricted) {
+                        cellStyles =
+                          "bg-[#1D3D3C] border-2 border-[#C7A03A] text-white ring-2 ring-[#C7A03A]/40 shadow-md shadow-[#1D3D3C]/20 scale-[1.02] z-10";
+                      } else if (isToday) {
+                        cellStyles += " ring-2 ring-[#C7A03A]/60 border-[#C7A03A]";
+                      }
+
+                      return (
+                        <div
+                          key={dateStr}
+                          onClick={() => {
+                            if (!restrictSchedule) setRestrictSchedule(true);
+                            handleToggleRestrictedDate(dateStr);
+                          }}
+                          className={`relative h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl border text-left cursor-pointer transition-all duration-150 flex flex-col justify-between select-none group touch-manipulation ${cellStyles}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-xs sm:text-sm font-extrabold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
+                                isRestricted
+                                  ? "bg-[#C7A03A] text-[#1D3D3C]"
+                                  : isToday
+                                  ? "bg-[#C7A03A]/20 text-[#80611F] border border-[#C7A03A]/60"
+                                  : "text-[#1D3D3C] group-hover:text-[#80611F]"
+                              }`}
+                            >
+                              {dayNum}
+                            </span>
+
+                            {isRestricted ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#D9B85F]" />
+                            ) : isToday ? (
+                              <span className="hidden sm:inline-block text-[9px] font-bold text-[#80611F]">
+                                Hoje
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center justify-center">
+                            {isRestricted ? (
+                              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#C7A03A] text-[#1D3D3C] whitespace-nowrap shadow-xs">
+                                ★ Exclusivo
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-[#736455] opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline-block">
+                                + Incluir
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Selected Dates Chips & Manual Fallback Input */}
+            <div className="space-y-3 pt-3 border-t border-[#D8D0BD]/70">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs font-bold text-[#80611F] uppercase tracking-wider flex items-center space-x-1.5">
+                  <CalendarCheck className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>Datas Exclusivas Cadastradas ({restrictedDates.length})</span>
+                </span>
+
+                {/* Manual date input fallback */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={newRestrictedDate}
+                    onChange={(e) => setNewRestrictedDate(e.target.value)}
+                    className="px-3 py-1.5 text-xs bg-white border border-[#D8D0BD] rounded-xl focus:border-[#C7A03A] focus:outline-hidden font-medium text-[#1D3D3C]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddRestrictedDate}
+                    disabled={!newRestrictedDate}
+                    className="px-3 py-1.5 text-xs font-bold text-[#1D3D3C] gold-gradient rounded-xl shadow-xs hover:brightness-105 active:scale-95 transition-all flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar</span>
+                  </button>
+                </div>
+              </div>
+
+              {restrictedDates.length === 0 ? (
+                <div className="p-4 rounded-xl bg-[#FAF7F2] border border-dashed border-[#D8D0BD] text-center">
+                  <p className="text-xs text-[#736455] italic">
+                    Nenhuma data cadastrada ainda. Clique diretamente nos dias do calendário acima ou use o atalho &quot;Copiar do Período Black&quot;.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD]">
                   {restrictedDates.map((dateStr) => {
-                    const [y, m, d] = dateStr.split("-");
-                    const formattedDisplay = `${d}/${m}/${y}`;
+                    const formattedDisplay = formatDisplayDateOnly(dateStr);
                     return (
                       <span
                         key={dateStr}
-                        className="inline-flex items-center space-x-1.5 px-3 py-1 bg-[#1D3D3C] text-white rounded-full text-xs font-semibold shadow-xs border border-[#C7A03A]/40"
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#1D3D3C] text-white rounded-full text-xs font-semibold shadow-xs border border-[#C7A03A]/40"
                       >
                         <Calendar className="w-3 h-3 text-[#D9B85F]" />
                         <span>{formattedDisplay}</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveRestrictedDate(dateStr)}
-                          className="hover:text-rose-300 ml-1 transition-colors"
+                          className="hover:text-rose-300 ml-1 transition-colors p-0.5"
                           title="Remover data"
                         >
                           <X className="w-3.5 h-3.5" />
