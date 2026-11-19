@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import Image from "next/image";
 import { ServiceItem } from "@/types/service";
 import { BlackFridayCampaign, BlackFridayCampaignRow } from "@/types/blackFriday";
 import { getServiceBlackFridayPrice } from "@/lib/services/blackFridayPricing";
@@ -192,18 +191,12 @@ export function BlackFridayExclusiveShowcase({
               >
                 {/* Imagem do Serviço ou Header */}
                 <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-[#1D3D3C]/40">
-                  {service.imageUrl ? (
-                    <Image
-                      src={service.imageUrl}
-                      alt={service.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1D3D3C] to-[#0D1D1C] p-6 text-center">
-                      <Sparkles className="w-12 h-12 text-[#C7A03A]/50" />
-                    </div>
-                  )}
+                  <img
+                    src={service.imageUrl || "/brand/Carrossel_Fotos/1.webp"}
+                    alt={service.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                  />
 
                   {/* Overlay gradiente escuro */}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#122B2A] via-transparent to-black/40" />
