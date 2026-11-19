@@ -1,11 +1,20 @@
 "use client";
 
-import { Sparkles, Calendar, Tag, ShieldCheck, ArrowRight, Zap, Layers } from "lucide-react";
+import { useMemo } from "react";
+import { Sparkles, Calendar, Tag, ShieldCheck, ArrowRight, Zap, Layers, Clock } from "lucide-react";
 import { BlackFridayCampaign, BlackFridayCampaignRow } from "@/types/blackFriday";
 
 export interface BlackFridayHighlightsSectionProps {
   campaign: BlackFridayCampaign | BlackFridayCampaignRow;
   onExploreServices?: () => void;
+}
+
+interface HighlightCard {
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  tag: string;
 }
 
 export function BlackFridayHighlightsSection({
@@ -17,30 +26,142 @@ export function BlackFridayHighlightsSection({
     (campaign as BlackFridayCampaignRow)?.name ??
     "Black Friday Oficial";
 
+  // 1. Procedimentos configurados no dashboard
+  const configs: any[] = useMemo(() => {
+    const raw =
+      (campaign as BlackFridayCampaign)?.servicesConfig ??
+      (campaign as BlackFridayCampaignRow)?.services_config;
+    return Array.isArray(raw) ? raw : [];
+  }, [campaign]);
+
+  // 2. Desconto progressivo configurado no dashboard
+  const progressiveTiers: any[] = useMemo(() => {
+    const raw =
+      (campaign as BlackFridayCampaign)?.progressiveDiscount?.tiers ??
+      (campaign as BlackFridayCampaignRow)?.progressive_discount?.tiers;
+    return Array.isArray(raw) ? raw : [];
+  }, [campaign]);
+  const hasProgressive = progressiveTiers.length > 0;
+
+  // 3. Restrição de agenda configurada no dashboard
   const restrictSchedule = Boolean(
     (campaign as BlackFridayCampaign)?.restrictSchedule ??
     (campaign as BlackFridayCampaignRow)?.restrict_schedule
   );
 
-  const restrictedDates: string[] = (() => {
+  const restrictedDates: string[] = useMemo(() => {
     const raw =
       (campaign as BlackFridayCampaign)?.restrictedDates ??
       (campaign as BlackFridayCampaignRow)?.restricted_dates;
     return Array.isArray(raw) ? raw : [];
-  })();
+  }, [campaign]);
+  const hasRestrictedDates = restrictSchedule && restrictedDates.length > 0;
 
-  const progressiveTiers =
-    (campaign as BlackFridayCampaign)?.progressiveDiscount?.tiers ??
-    (campaign as BlackFridayCampaignRow)?.progressive_discount?.tiers ??
-    [];
-  const hasProgressive = Array.isArray(progressiveTiers) && progressiveTiers.length > 0;
+  // 4. Período de vigência salvo no dashboard
+  const startsAt =
+    (campaign as BlackFridayCampaign)?.startsAt ??
+    (campaign as BlackFridayCampaignRow)?.starts_at;
+  const endsAt =
+    (campaign as BlackFridayCampaign)?.endsAt ??
+    (campaign as BlackFridayCampaignRow)?.ends_at;
+
+  // Constrói os cards dinamicamente exibindo APENAS o que foi configurado e salvo no dashboard
+  const cards: HighlightCard[] = useMemo(() => {
+    const list: HighlightCard[] = [];
+
+    // Card de Procedimentos em Promoção
+    if (configs.length > 0) {
+      list.push({
+        id: "descontos",
+        icon: Tag,
+        title: "Descontos Reais",
+        description: `${configs.length} ${
+          configs.length === 1 ? "procedimento selecionado" : "procedimentos selecionados"
+        } com valores promocionais aplicados diretamente na tabela.`,
+        tag: "Transparência total nos valores",
+      });
+    }
+
+    // Card de Bônus Progressivo (apenas se configurado e ativo no dashboard)
+    if (hasProgressive) {
+      const maxDiscount = Math.max(
+        ...progressiveTiers.map((t: any) =>
+          Number(t.discountPercent ?? t.discount_percent ?? 0)
+        )
+      );
+      list.push({
+        id: "progressivo",
+        icon: Layers,
+        title: "Bônus Progressivo",
+        description: `Combine procedimentos no mesmo dia e ganhe até ${maxDiscount}% de desconto adicional acumulativo no seu pacote!`,
+        tag: "Economia ao montar combos",
+      });
+    }
+
+    // Card de Datas Reservadas (apenas se restrição de agenda ativa com datas salvas no dashboard)
+    if (hasRestrictedDates) {
+      const formatted = restrictedDates
+        .map((d) => {
+          const parts = d.split("-");
+          return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+        })
+        .join(", ");
+      list.push({
+        id: "datas",
+        icon: Calendar,
+        title: "Datas Reservadas",
+        description: `Agenda com atendimento dedicado exclusivamente aos procedimentos da campanha nas datas: ${formatted}.`,
+        tag: "Atendimento com horário marcado",
+      });
+    }
+
+    // Card de Período da Campanha (se houver datas cadastradas no dashboard)
+    if (startsAt || endsAt) {
+      const formatIso = (iso: string) => {
+        try {
+          const [y, m, d] = iso.split("T")[0].split("-");
+          return `${d}/${m}`;
+        } catch {
+          return iso;
+        }
+      };
+      const periodDesc =
+        startsAt && endsAt
+          ? `Campanha válida de ${formatIso(startsAt)} até ${formatIso(endsAt)}.`
+          : endsAt
+          ? `Campanha válida até ${formatIso(endsAt)}.`
+          : `Campanha iniciada em ${formatIso(startsAt!)}.`;
+
+      list.push({
+        id: "periodo",
+        icon: Clock,
+        title: "Período da Campanha",
+        description: `${periodDesc} Vagas limitadas por ordem de agendamento.`,
+        tag: "Tempo limitado",
+      });
+    }
+
+    // Card de Garantia de Qualidade & Padrão Técnico
+    list.push({
+      id: "qualidade",
+      icon: ShieldCheck,
+      title: "Padrão Premium Intacto",
+      description:
+        "Tratamentos realizados com produtos de ponta internacionais (Wella, L'Oréal, Braé) e diagnóstico capilar minucioso.",
+      tag: "Saúde dos fios em primeiro lugar",
+    });
+
+    return list;
+  }, [configs, hasProgressive, progressiveTiers, hasRestrictedDates, restrictedDates, startsAt, endsAt]);
 
   const handleCta = () => {
     if (onExploreServices) {
       onExploreServices();
       return;
     }
-    const target = document.getElementById("black-friday-servicos") || document.getElementById("servicos");
+    const target =
+      document.getElementById("black-friday-servicos") ||
+      document.getElementById("servicos");
     if (target) {
       target.scrollIntoView({ behavior: "smooth" });
     }
@@ -89,90 +210,44 @@ export function BlackFridayHighlightsSection({
           </p>
         </div>
 
-        {/* Grid de 3 ou 4 Cards Estilizados */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 mb-10">
-          {/* Card 1: Descontos Especiais */}
-          <div className="p-6 rounded-3xl bg-gradient-to-b from-[#122B2A] to-[#0D1D1C] border border-[#C7A03A]/40 shadow-xl flex flex-col justify-between space-y-4 hover:border-[#C7A03A] transition-all group">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center border border-[#C7A03A]/40 group-hover:scale-105 transition-transform shadow-xs">
-                <Tag className="w-6 h-6 text-[#C7A03A]" />
+        {/* Grid Dinâmico: renderiza apenas os cards correspondentes a dados reais configurados no dashboard */}
+        <div
+          className={`grid grid-cols-1 ${
+            cards.length === 1
+              ? "max-w-md mx-auto"
+              : cards.length === 2
+              ? "sm:grid-cols-2 max-w-3xl mx-auto"
+              : cards.length === 3
+              ? "sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto"
+              : "sm:grid-cols-2 lg:grid-cols-4"
+          } gap-5 sm:gap-6 mb-10`}
+        >
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.id}
+                data-testid={`bf-highlight-card-${card.id}`}
+                className="p-6 rounded-3xl bg-gradient-to-b from-[#122B2A] to-[#0D1D1C] border border-[#C7A03A]/40 shadow-xl flex flex-col justify-between space-y-4 hover:border-[#C7A03A] transition-all group"
+              >
+                <div className="space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center border border-[#C7A03A]/40 group-hover:scale-105 transition-transform shadow-xs">
+                    <Icon className="w-6 h-6 text-[#C7A03A]" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-[#FCF5EB]">
+                    {card.title}
+                  </h3>
+                  <p className="text-xs text-stone-300 leading-relaxed">
+                    {card.description}
+                  </p>
+                </div>
+                <div className="pt-2 border-t border-[#C7A03A]/20 text-[11px] font-semibold text-[#D9B85F] flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-[#C7A03A]" />
+                  <span>{card.tag}</span>
+                </div>
               </div>
-              <h3 className="text-base sm:text-lg font-bold text-[#FCF5EB]">
-                Descontos Reais
-              </h3>
-              <p className="text-xs text-stone-300 leading-relaxed">
-                Valores promocionais aplicados diretamente na tabela para os procedimentos participantes selecionados.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#C7A03A]/20 text-[11px] font-semibold text-[#D9B85F] flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-[#C7A03A]" />
-              <span>Transparência total nos valores</span>
-            </div>
-          </div>
-
-          {/* Card 2: Desconto Progressivo */}
-          <div className="p-6 rounded-3xl bg-gradient-to-b from-[#122B2A] to-[#0D1D1C] border border-[#C7A03A]/40 shadow-xl flex flex-col justify-between space-y-4 hover:border-[#C7A03A] transition-all group">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center border border-[#C7A03A]/40 group-hover:scale-105 transition-transform shadow-xs">
-                <Layers className="w-6 h-6 text-[#C7A03A]" />
-              </div>
-              <h3 className="text-base sm:text-lg font-bold text-[#FCF5EB]">
-                Bônus Progressivo
-              </h3>
-              <p className="text-xs text-stone-300 leading-relaxed">
-                {hasProgressive
-                  ? "Combine 2 ou mais procedimentos no mesmo dia e ganhe descontos extras acumulativos no pacote!"
-                  : "Possibilidade de combinar múltiplos procedimentos no mesmo dia com montagem personalizada."}
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#C7A03A]/20 text-[11px] font-semibold text-[#D9B85F] flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#C7A03A]" />
-              <span>Economia ao montar combos</span>
-            </div>
-          </div>
-
-          {/* Card 3: Datas Exclusivas & Agenda */}
-          <div className="p-6 rounded-3xl bg-gradient-to-b from-[#122B2A] to-[#0D1D1C] border border-[#C7A03A]/40 shadow-xl flex flex-col justify-between space-y-4 hover:border-[#C7A03A] transition-all group">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center border border-[#C7A03A]/40 group-hover:scale-105 transition-transform shadow-xs">
-                <Calendar className="w-6 h-6 text-[#C7A03A]" />
-              </div>
-              <h3 className="text-base sm:text-lg font-bold text-[#FCF5EB]">
-                {restrictSchedule ? "Datas Reservadas" : "Vagas Limitadas"}
-              </h3>
-              <p className="text-xs text-stone-300 leading-relaxed">
-                {restrictSchedule && restrictedDates.length > 0
-                  ? `Agenda com datas dedicadas exclusivamente para os serviços da campanha: ${restrictedDates.map(d => {
-                      const parts = d.split("-");
-                      return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
-                    }).join(", ")}.`
-                  : "Horários controlados para garantir que cada cliente receba atenção exclusiva e sem pressa."}
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#C7A03A]/20 text-[11px] font-semibold text-[#D9B85F] flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-[#C7A03A]" />
-              <span>Atendimento com horário marcado</span>
-            </div>
-          </div>
-
-          {/* Card 4: Cosmética Premium */}
-          <div className="p-6 rounded-3xl bg-gradient-to-b from-[#122B2A] to-[#0D1D1C] border border-[#C7A03A]/40 shadow-xl flex flex-col justify-between space-y-4 hover:border-[#C7A03A] transition-all group">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1D3D3C] text-[#C7A03A] flex items-center justify-center border border-[#C7A03A]/40 group-hover:scale-105 transition-transform shadow-xs">
-                <ShieldCheck className="w-6 h-6 text-[#C7A03A]" />
-              </div>
-              <h3 className="text-base sm:text-lg font-bold text-[#FCF5EB]">
-                Padrão Premium Intacto
-              </h3>
-              <p className="text-xs text-stone-300 leading-relaxed">
-                Tratamentos com produtos de ponta internacionais (Wella, L'Oréal, Braé) e diagnóstico capilar detalhado.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#C7A03A]/20 text-[11px] font-semibold text-[#D9B85F] flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#C7A03A]" />
-              <span>Saúde dos fios em primeiro lugar</span>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Botão de Rolar para os Serviços Promocionais */}
