@@ -27,6 +27,7 @@ import {
   Sunset,
   Scissors,
   HelpCircle,
+  Lock,
 } from "lucide-react";
 
 interface AvailabilityManagerViewProps {
@@ -35,6 +36,7 @@ interface AvailabilityManagerViewProps {
   dataService?: typeof SupabaseDataService;
   appointments?: Appointment[];
   onOpenPreReservations?: () => void;
+  onAvailabilityChange?: (days: AvailableDay[]) => void;
 }
 
 export function AvailabilityManagerView({
@@ -43,6 +45,7 @@ export function AvailabilityManagerView({
   dataService = SupabaseDataService,
   appointments = [],
   onOpenPreReservations,
+  onAvailabilityChange,
 }: AvailabilityManagerViewProps) {
   // Navegação de Mês/Ano (sincronizado dinamicamente em relação ao mês e ano atuais)
   const [currentYearMonth, setCurrentYearMonth] = useState({ year: 2026, month: 11 });
@@ -73,6 +76,12 @@ export function AvailabilityManagerView({
   const [maxClients, setMaxClients] = useState(8);
   const [customNotes, setCustomNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal de Confirmação para Fechar Dias (segurança contra perda de slots ou agendamentos)
+  const [closingConfirmModal, setClosingConfirmModal] = useState<{
+    dates: string[];
+    bookedCount: number;
+  } | null>(null);
 
   // Estado do Popover / Ação Rápida de Dia Aberto
   const [activeDayMenu, setActiveDayMenu] = useState<{
@@ -115,13 +124,14 @@ export function AvailabilityManagerView({
 
       setAvailableDays(days);
       setTemplates(tpls);
+      onAvailabilityChange?.(days);
     } catch (err) {
       console.error("Erro ao carregar dias disponíveis:", err);
       showToast("Não foi possível carregar a disponibilidade.", "error");
     } finally {
       setIsLoading(false);
     }
-  }, [currentYearMonth, professionalId, dataService]);
+  }, [currentYearMonth, professionalId, dataService, onAvailabilityChange]);
 
   useEffect(() => {
     loadMonthData();
@@ -211,6 +221,23 @@ export function AvailabilityManagerView({
         next.delete(dateStr);
       } else {
         next.add(dateStr);
+        // Se for o único dia selecionado e estiver aberto, pré-carrega os horários dele
+        if (next.size === 1) {
+          const dayObj = openDaysMap.get(dateStr);
+          if (dayObj) {
+            setStartTime(dayObj.startTime);
+            setEndTime(dayObj.endTime);
+            if (dayObj.breakStart && dayObj.breakEnd) {
+              setHasLunchBreak(true);
+              setBreakStart(dayObj.breakStart);
+              setBreakEnd(dayObj.breakEnd);
+            } else {
+              setHasLunchBreak(false);
+            }
+            setMaxClients(dayObj.maxClients || 8);
+            setCustomNotes(dayObj.customNotes || "");
+          }
+        }
       }
       return next;
     });
@@ -242,11 +269,49 @@ export function AvailabilityManagerView({
     showToast(`Todos os ${daysInMonth} dias do mês selecionados.`);
   };
 
+  // Selecionar todos os dias abertos do mês
+  const selectAllOpenDays = () => {
+    const next = new Set<string>();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const padDay = String(day).padStart(2, "0");
+      const padMonth = String(currentYearMonth.month).padStart(2, "0");
+      const dateStr = `${currentYearMonth.year}-${padMonth}-${padDay}`;
+      if (openDaysMap.has(dateStr)) {
+        next.add(dateStr);
+      }
+    }
+    setSelectedDates(next);
+    if (next.size === 0) {
+      showToast("Não há dias com agenda aberta neste mês para selecionar.", "info");
+    } else {
+      showToast(`${next.size} dia(s) aberto(s) selecionado(s) para gerenciamento.`);
+    }
+  };
+
   // Limpar seleção
   const clearSelection = () => {
     setSelectedDates(new Set());
     setActiveDayMenu(null);
   };
+
+  // Estatísticas dos dias selecionados
+  const selectedStats = useMemo(() => {
+    const datesArr = Array.from(selectedDates);
+    const openDates = datesArr.filter((d) => openDaysMap.has(d));
+    const closedDates = datesArr.filter((d) => !openDaysMap.has(d));
+    const bookedCount = datesArr.reduce((sum, d) => sum + (appointmentsCountMap.get(d) || 0), 0);
+    return {
+      total: datesArr.length,
+      openCount: openDates.length,
+      closedCount: closedDates.length,
+      openDates,
+      closedDates,
+      bookedCount,
+    };
+  }, [selectedDates, openDaysMap, appointmentsCountMap]);
+
+  const singleSelectedDate = selectedDates.size === 1 ? Array.from(selectedDates)[0] : null;
+  const singleSelectedDayObj = singleSelectedDate ? openDaysMap.get(singleSelectedDate) : null;
 
   // Chips de Horário Rápido
   const applyQuickTime = (type: "manha" | "tarde" | "completo" | "estendido") => {
@@ -298,7 +363,7 @@ export function AvailabilityManagerView({
 
       const savedCount = await dataService.saveAvailableDaysBatch(batchConfigs);
 
-      showToast(`✅ ${savedCount || selectedDates.size} dia(s) aberto(s) com sucesso na sua agenda!`, "success");
+      showToast(`✅ ${savedCount || selectedDates.size} dia(s) salvo(s) com sucesso na sua agenda!`, "success");
       setSelectedDates(new Set());
       await loadMonthData();
     } catch (err) {
@@ -309,20 +374,53 @@ export function AvailabilityManagerView({
     }
   };
 
-  // Fechar dia individualmente
-  const handleCloseSingleDay = async (dateStr: string) => {
+  // Iniciar fechamento dos dias selecionados
+  const handleInitiateCloseSelectedDays = () => {
+    if (selectedDates.size === 0) return;
+    const dates = Array.from(selectedDates);
+    const bookedCount = selectedStats.bookedCount;
+    setClosingConfirmModal({ dates, bookedCount });
+  };
+
+  // Confirmar e fechar datas
+  const handleConfirmCloseDays = async (datesToClose: string[]) => {
+    if (!datesToClose || datesToClose.length === 0) return;
+    setIsSubmitting(true);
     try {
-      const success = await dataService.closeAvailableDay(professionalId, dateStr);
-      if (success) {
-        showToast(`Dia ${dateStr.split("-").reverse().join("/")} foi fechado.`, "info");
-        setActiveDayMenu(null);
-        await loadMonthData();
+      if (dataService.closeAvailableDaysBatch) {
+        await dataService.closeAvailableDaysBatch(professionalId, datesToClose);
       } else {
-        showToast("Não foi possível fechar o dia.", "error");
+        await Promise.all(datesToClose.map((d) => dataService.closeAvailableDay(professionalId, d)));
       }
+
+      const formattedMsg =
+        datesToClose.length === 1
+          ? `Dia ${datesToClose[0].split("-").reverse().join("/")} foi fechado com sucesso!`
+          : `${datesToClose.length} dias foram fechados com sucesso na sua agenda!`;
+
+      showToast(`🔒 ${formattedMsg}`, "info");
+      setSelectedDates(new Set());
+      setClosingConfirmModal(null);
+      setActiveDayMenu(null);
+      await loadMonthData();
     } catch (err) {
-      console.error("Erro ao fechar dia:", err);
-      showToast("Erro ao fechar dia selecionado.", "error");
+      console.error("Erro ao fechar dias:", err);
+      showToast("Houve um erro ao fechar as datas selecionadas.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Fechar dia individualmente
+  const handleCloseSingleDay = (dateStr: string) => {
+    const bookedCount = appointmentsCountMap.get(dateStr) || 0;
+    if (bookedCount > 0) {
+      setClosingConfirmModal({
+        dates: [dateStr],
+        bookedCount,
+      });
+    } else {
+      handleConfirmCloseDays([dateStr]);
     }
   };
 
@@ -443,7 +541,7 @@ export function AvailabilityManagerView({
               <span>Gestão de Disponibilidade • Gleicy Ronha</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1D3D3C] flex items-center gap-3">
-              <span>Abertura de Agenda</span>
+              <span>Abertura e Fechamento de Agenda</span>
               <span className="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold">
                 {monthStats.totalOpen} dias abertos
               </span>
@@ -459,7 +557,7 @@ export function AvailabilityManagerView({
             </div>
 
             <p className="text-xs sm:text-sm text-[#736455] max-w-2xl mt-1 leading-relaxed">
-              Defina os dias e turnos em que você atenderá clientes no Espaço da Beleza. As clientes só conseguirão agendar online nos dias que você liberar aqui.
+              Defina os dias e turnos em que você atenderá clientes no Espaço da Beleza. Abra novas datas ou feche dias previamente abertos para bloquear novos agendamentos online.
             </p>
           </div>
 
@@ -523,13 +621,35 @@ export function AvailabilityManagerView({
             >
               🗓️ Todo o Mês
             </button>
-            {selectedDates.size > 0 && (
+            {monthStats.totalOpen > 0 && (
               <button
-                onClick={clearSelection}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-red-50 border border-red-200 text-xs font-semibold text-red-600 transition-all shadow-xs"
+                type="button"
+                onClick={selectAllOpenDays}
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-xs font-bold text-emerald-900 transition-all shadow-xs flex items-center gap-1"
+                title="Selecionar todos os dias abertos deste mês"
               >
-                ✕ Limpar ({selectedDates.size})
+                <span>🟢 Dias Abertos ({monthStats.totalOpen})</span>
               </button>
+            )}
+            {selectedDates.size > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-[#D8D0BD] text-xs font-semibold text-[#736455] transition-all shadow-xs"
+                >
+                  ✕ Limpar ({selectedDates.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleInitiateCloseSelectedDays}
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-xs font-bold text-rose-700 transition-all shadow-xs flex items-center space-x-1 active:scale-95"
+                  title="Fechar todas as datas selecionadas"
+                >
+                  <Lock className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Fechar Selecionados ({selectedDates.size})</span>
+                </button>
+              </>
             )}
           </div>
 
@@ -658,21 +778,34 @@ export function AvailabilityManagerView({
                     </span>
                   ) : isOpen ? (
                     // Menu rápido de Ação para Dia Aberto
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (activeDayMenu?.dateStr === dateStr) {
-                          setActiveDayMenu(null);
-                        } else {
-                          setActiveDayMenu({ dateStr, dayObj: dayObj! });
-                        }
-                      }}
-                      className="w-4 h-4 sm:w-5 sm:h-5 rounded-md hover:bg-[#FCF5EB] flex items-center justify-center text-[#736455] hover:text-[#1D3D3C] transition-colors"
-                      title="Opções do dia"
-                    >
-                      <Sliders className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#C7A03A]" />
-                    </button>
+                    <div className="flex items-center space-x-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseSingleDay(dateStr);
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-md hover:bg-rose-100 flex items-center justify-center text-rose-600 transition-colors"
+                        title="Fechar agenda deste dia"
+                      >
+                        <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activeDayMenu?.dateStr === dateStr) {
+                            setActiveDayMenu(null);
+                          } else {
+                            setActiveDayMenu({ dateStr, dayObj: dayObj! });
+                          }
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-md hover:bg-[#FCF5EB] flex items-center justify-center text-[#736455] hover:text-[#1D3D3C] transition-colors"
+                        title="Opções do dia"
+                      >
+                        <Sliders className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#C7A03A]" />
+                      </button>
+                    </div>
                   ) : null}
                 </div>
 
@@ -739,9 +872,9 @@ export function AvailabilityManagerView({
                     </button>
                     <button
                       onClick={() => handleCloseSingleDay(dateStr)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-red-50 text-red-700 flex items-center space-x-2 transition-colors"
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-rose-50 text-rose-700 flex items-center space-x-2 transition-colors font-medium"
                     >
-                      <XCircle className="w-3.5 h-3.5 text-red-500" />
+                      <Lock className="w-3.5 h-3.5 text-rose-500" />
                       <span>Fechar este dia</span>
                     </button>
                   </div>
@@ -763,26 +896,50 @@ export function AvailabilityManagerView({
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-[#1D3D3C] flex items-center gap-2">
+                <h3 className="text-lg font-bold text-[#1D3D3C] flex flex-wrap items-center gap-2">
                   <span>{selectedDates.size} dia(s) selecionado(s)</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#FAF7F2] text-[#80611F] border border-[#C7A03A]/40 font-semibold">
-                    Configurar Horários
-                  </span>
+                  {selectedStats.openCount > 0 && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold">
+                      {selectedStats.openCount} aberto(s)
+                    </span>
+                  )}
+                  {selectedStats.closedCount > 0 && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-200 text-stone-800 border border-stone-300 font-semibold">
+                      {selectedStats.closedCount} fechado(s)
+                    </span>
+                  )}
+                  {selectedStats.bookedCount > 0 && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold">
+                      ⚠️ {selectedStats.bookedCount} agendamento(s)
+                    </span>
+                  )}
                 </h3>
-                <p className="text-xs text-[#736455]">
-                  Os horários abaixo serão aplicados a todos os dias marcados no calendário.
+                <p className="text-xs text-[#736455] mt-0.5">
+                  Configure os horários para abrir/atualizar ou clique em <strong>Fechar dia(s)</strong> para bloquear a agenda online.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
+                type="button"
                 onClick={clearSelection}
                 className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#736455] hover:text-[#1D3D3C] text-xs font-semibold border border-[#D8D0BD] transition-colors shadow-xs"
               >
                 Cancelar
               </button>
               <button
+                type="button"
+                onClick={handleInitiateCloseSelectedDays}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs shadow-xs flex items-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50"
+                title="Fechar datas selecionadas e bloquear agendamentos"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                <span>Fechar {selectedDates.size === 1 ? "este dia" : `${selectedDates.size} dias`}</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleSaveBatch}
                 disabled={isSubmitting}
                 className="px-5 py-2.5 rounded-xl gold-gradient text-[#1D3D3C] font-extrabold text-xs shadow-md flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
@@ -792,10 +949,30 @@ export function AvailabilityManagerView({
                 ) : (
                   <Check className="w-4 h-4 stroke-[3]" />
                 )}
-                <span>Abrir {selectedDates.size} dia(s) ✅</span>
+                <span>{singleSelectedDayObj ? "Salvar Horários ✅" : `Abrir ${selectedDates.size} dia(s) ✅`}</span>
               </button>
             </div>
           </div>
+
+          {/* Banner informativo quando exatamente 1 dia já aberto está selecionado */}
+          {singleSelectedDayObj && (
+            <div className="p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-300 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center space-x-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse shrink-0" />
+                <span>
+                  O dia <strong>{singleSelectedDate?.split("-").reverse().join("/")}</strong> está atualmente <strong>ABERTO</strong> ({singleSelectedDayObj.startTime.slice(0, 5)} às {singleSelectedDayObj.endTime.slice(0, 5)}).
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCloseSingleDay(singleSelectedDayObj.date)}
+                className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 font-bold text-xs flex items-center gap-1.5 shrink-0 transition-colors active:scale-95"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-700" />
+                <span>Fechar este dia agora</span>
+              </button>
+            </div>
+          )}
 
           {/* Chips de Horários Rápidos */}
           <div className="space-y-2">
@@ -971,18 +1148,120 @@ export function AvailabilityManagerView({
               </button>
             </div>
 
-            <button
-              onClick={handleSaveBatch}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl gold-gradient text-[#1D3D3C] font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-[#1D3D3C]" />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleInitiateCloseSelectedDays}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                <span>Fechar {selectedDates.size === 1 ? "este dia" : `${selectedDates.size} dias`}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBatch}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl gold-gradient text-[#1D3D3C] font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#1D3D3C]" />
+                ) : (
+                  <Check className="w-4 h-4 stroke-[3]" />
+                )}
+                <span>{singleSelectedDayObj ? "Salvar Horários ✅" : `Abrir ${selectedDates.size} dia(s) ✅`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação para Fechamento de Dias da Agenda */}
+      {closingConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white border-t border-x sm:border border-[#D8D0BD] rounded-t-[28px] sm:rounded-3xl rounded-b-none sm:rounded-b-3xl max-w-lg w-full p-5 pb-8 sm:p-6 space-y-4 shadow-2xl animate-slide-up-sheet text-[#1D3D3C]">
+            {/* Puxador Visual Mobile */}
+            <div className="w-12 h-1.5 bg-[#D8D0BD] rounded-full mx-auto -mt-1 mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 border-b border-[#D8D0BD]">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <h4 className="text-base font-bold text-[#1D3D3C]">
+                  {closingConfirmModal.dates.length === 1
+                    ? `Fechar Agenda do Dia ${closingConfirmModal.dates[0].split("-").reverse().join("/")}?`
+                    : `Fechar ${closingConfirmModal.dates.length} Datas da Agenda?`}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClosingConfirmModal(null)}
+                className="w-7 h-7 rounded-full bg-[#FAF7F2] text-[#736455] hover:text-[#1D3D3C] flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs sm:text-sm text-[#736455]">
+              <p>
+                Ao fechar {closingConfirmModal.dates.length === 1 ? "este dia" : "estas datas"}, novos agendamentos online por clientes{" "}
+                <strong className="text-[#1D3D3C]">ficarão bloqueados</strong>.
+              </p>
+
+              {/* Lista compacta das datas selecionadas */}
+              <div className="max-h-28 overflow-y-auto p-2.5 rounded-xl bg-[#FAF7F2] border border-[#D8D0BD] flex flex-wrap gap-1.5">
+                {closingConfirmModal.dates.map((d) => (
+                  <span
+                    key={d}
+                    className="px-2 py-1 rounded-lg bg-white border border-[#D8D0BD] text-xs font-semibold text-[#1D3D3C]"
+                  >
+                    📅 {d.split("-").reverse().join("/")}
+                  </span>
+                ))}
+              </div>
+
+              {/* Alerta se houver agendamentos existentes */}
+              {closingConfirmModal.bookedCount > 0 ? (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Atenção: Há {closingConfirmModal.bookedCount} agendamento(s) marcado(s)</span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs leading-relaxed text-amber-900/90">
+                    Seus agendamentos já marcados <strong>permanecerão ativos</strong> no seu painel operacional. O fechamento apenas impede que novas clientes agendem online para esta(s) data(s).
+                  </p>
+                </div>
               ) : (
-                <Check className="w-4 h-4 stroke-[3]" />
+                <p className="text-[11px] text-[#736455]">
+                  Nenhum agendamento ativo será afetado. Você poderá reabrir as datas a qualquer momento.
+                </p>
               )}
-              <span>Abrir {selectedDates.size} dia(s) ✅</span>
-            </button>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-[#D8D0BD]/60">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setClosingConfirmModal(null)}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#FAF7F2] text-xs font-semibold text-[#736455] hover:text-[#1D3D3C] border border-[#D8D0BD] transition-colors"
+              >
+                Voltar / Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleConfirmCloseDays(closingConfirmModal.dates)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center space-x-1.5 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Lock className="w-3.5 h-3.5" />
+                )}
+                <span>Sim, Fechar {closingConfirmModal.dates.length === 1 ? "o Dia" : `${closingConfirmModal.dates.length} Dias`}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

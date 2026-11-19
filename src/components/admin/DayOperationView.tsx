@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Appointment } from "@/types/appointment";
 import { TriageSubmission } from "@/types/triage";
 import { ServiceItem } from "@/types/service";
+import { AvailableDay } from "@/types/availability";
 import { formatBRL } from "@/lib/utils";
 import { LinearTimelineMaster } from "@/components/admin/LinearTimelineMaster";
 import confetti from "canvas-confetti";
@@ -30,6 +31,8 @@ interface DayOperationViewProps {
   onConfirmAppointment?: (appointment: Appointment) => void;
   onEditAppointment?: (appointment: Appointment) => void;
   dailyTargetRevenue?: number;
+  availableDays?: AvailableDay[];
+  onNavigateToAvailability?: () => void;
 }
 
 export function DayOperationView({
@@ -44,6 +47,8 @@ export function DayOperationView({
   onConfirmAppointment,
   onEditAppointment,
   dailyTargetRevenue = 1500,
+  availableDays,
+  onNavigateToAvailability,
 }: DayOperationViewProps) {
   // Filtra agendamentos do dia selecionado (apenas agendamentos reais/confirmados)
   const todayAppointments = appointments.filter(
@@ -195,7 +200,7 @@ export function DayOperationView({
 
         {/* Barra de Ações Rápidas */}
         <div className="relative z-10 mt-5 pt-5 sm:mt-6 sm:pt-6 border-t border-white/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[#F0EFE3]">Data em exibição:</span>
             <input
               type="date"
@@ -203,6 +208,25 @@ export function DayOperationView({
               onChange={(e) => onDateChange(e.target.value)}
               className="px-3 py-1.5 rounded-xl bg-white/20 border border-white/25 text-xs font-semibold text-white outline-none focus:border-[#C7A03A]"
             />
+            {availableDays && (
+              <button
+                type="button"
+                onClick={onNavigateToAvailability}
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-1 active:scale-95 ${
+                  availableDays.some((d) => d.date === selectedDate && d.isOpen)
+                    ? "bg-emerald-500/25 text-emerald-200 border-emerald-400/50 hover:bg-emerald-500/35"
+                    : "bg-white/10 text-stone-300 border-white/20 hover:bg-white/20"
+                }`}
+                title="Clique para gerenciar a abertura ou fechamento da agenda para esta data"
+              >
+                <span>
+                  {availableDays.some((d) => d.date === selectedDate && d.isOpen)
+                    ? "🟢 Agenda Aberta"
+                    : "🔒 Agenda Fechada"}
+                </span>
+                <span className="text-[9px] opacity-70 underline ml-0.5">Gerenciar</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">

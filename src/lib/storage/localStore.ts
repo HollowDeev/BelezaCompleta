@@ -675,8 +675,57 @@ export class SalonStore {
       list[existingIndex].updatedAt = new Date().toISOString();
       setStorageItem("available_days", list);
       return true;
+    } else {
+      list.push({
+        id: `avail-${Date.now()}-${date}`,
+        orgId: "11111111-1111-4111-8111-111111111111",
+        professionalId,
+        date,
+        startTime: "09:00",
+        endTime: "19:00",
+        isOpen: false,
+        maxClients: 8,
+        slotIntervalMin: 15,
+        updatedAt: new Date().toISOString(),
+      });
+      setStorageItem("available_days", list);
+      return true;
     }
-    return false;
+  }
+
+  static closeAvailableDaysBatch(professionalId: string, dates: string[]): number {
+    if (!dates || dates.length === 0) return 0;
+    const list = getStorageItem<AvailableDay[]>("available_days", initialAvailableDays);
+    const dateSet = new Set(dates);
+    let count = 0;
+
+    list.forEach((d) => {
+      if (dateSet.has(d.date) && (d.professionalId === professionalId || !d.professionalId)) {
+        d.isOpen = false;
+        d.updatedAt = new Date().toISOString();
+        dateSet.delete(d.date);
+        count++;
+      }
+    });
+
+    dateSet.forEach((date) => {
+      list.push({
+        id: `avail-${Date.now()}-${date}-${count}`,
+        orgId: "11111111-1111-4111-8111-111111111111",
+        professionalId,
+        date,
+        startTime: "09:00",
+        endTime: "19:00",
+        isOpen: false,
+        maxClients: 8,
+        slotIntervalMin: 15,
+        updatedAt: new Date().toISOString(),
+      });
+      count++;
+    });
+
+    setStorageItem("available_days", list);
+    return count;
   }
 
   // Pré-Reservas

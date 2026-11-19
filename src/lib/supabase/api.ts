@@ -1763,6 +1763,27 @@ export class SupabaseDataService {
     }
   }
 
+  static async closeAvailableDaysBatch(professionalId: string, dates: string[]): Promise<number> {
+    if (!dates || dates.length === 0) return 0;
+    const validProfId = resolveValidUuid(professionalId, DEFAULT_GLEICY_ID) || professionalId;
+    const localCount = SalonStore.closeAvailableDaysBatch(validProfId, dates);
+
+    if (!isSupabaseConfigured || !supabase) return localCount;
+
+    try {
+      const { error, count } = await supabase
+        .from('available_days')
+        .update({ is_open: false, updated_at: new Date().toISOString() })
+        .eq('professional_id', validProfId)
+        .in('date', dates);
+      if (error) throw error;
+      return count || dates.length;
+    } catch (err) {
+      console.error('closeAvailableDaysBatch error:', err);
+      return localCount;
+    }
+  }
+
   static async getPreReservations(orgId: string, status?: string): Promise<PreReservation[]> {
     const validOrgId = resolveValidUuid(orgId, DEFAULT_ORG_ID) || orgId;
     if (!isSupabaseConfigured || !supabase) {
@@ -2270,6 +2291,7 @@ export class SupabaseDataService {
   saveAvailableDay = SupabaseDataService.saveAvailableDay;
   saveAvailableDaysBatch = SupabaseDataService.saveAvailableDaysBatch;
   closeAvailableDay = SupabaseDataService.closeAvailableDay;
+  closeAvailableDaysBatch = SupabaseDataService.closeAvailableDaysBatch;
   getPreReservations = SupabaseDataService.getPreReservations;
   createPreReservation = SupabaseDataService.createPreReservation;
   savePreReservation = SupabaseDataService.savePreReservation;

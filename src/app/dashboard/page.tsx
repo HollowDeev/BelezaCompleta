@@ -919,6 +919,8 @@ export default function DashboardPage() {
               onConfirmAppointment={handleConfirmAppointment}
               onEditAppointment={handleEditAppointment}
               dailyTargetRevenue={organization?.settings?.dailyTargetRevenue || 1500}
+              availableDays={availableDays}
+              onNavigateToAvailability={() => setAdminTab("abertura-agenda")}
             />
           )}
 
@@ -949,6 +951,7 @@ export default function DashboardPage() {
                 professionalId={profile?.id || "58f26242-1e53-432e-b924-dea25ee2068a"}
                 dataService={SupabaseDataService}
                 appointments={appointments}
+                onAvailabilityChange={(days) => setAvailableDays(days)}
               />
               <PreReservationQueue
                 orgId={organization?.id || "11111111-1111-4111-8111-111111111111"}
