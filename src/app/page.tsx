@@ -12,6 +12,8 @@ import { ClientNavbar } from "@/components/client/ClientNavbar";
 import { HeroSection } from "@/components/client/HeroSection";
 import { BlackFridayBanner } from "@/components/client/BlackFridayBanner";
 import { BlackFridayHero } from "@/components/client/BlackFridayHero";
+import { BlackFridayHighlightsSection } from "@/components/client/BlackFridayHighlightsSection";
+import { BlackFridayExclusiveShowcase } from "@/components/client/BlackFridayExclusiveShowcase";
 import { StatsBanner } from "@/components/client/StatsBanner";
 import { Transformations3DCarousel } from "@/components/client/Transformations3DCarousel";
 import { AboutStorySection } from "@/components/client/AboutStorySection";
@@ -98,7 +100,7 @@ export default function ClientHomePage() {
 
   const scrollToSection = (sectionId: string) => {
     if (sectionId === "agendar") {
-      const el = document.getElementById("servicos");
+      const el = document.getElementById("black-friday-servicos") || document.getElementById("servicos");
       if (el) el.scrollIntoView({ behavior: "smooth" });
       return;
     }
@@ -355,14 +357,22 @@ export default function ClientHomePage() {
         <BlackFridayHero
           organization={organization}
           campaign={blackFridayCampaign}
-          onExploreServices={() => scrollToSection("servicos")}
-          onBookNow={() => scrollToSection("servicos")}
+          onExploreServices={() => scrollToSection("black-friday-servicos")}
+          onBookNow={() => scrollToSection("black-friday-servicos")}
         />
       ) : (
         <HeroSection
           organization={organization}
           onExploreServices={() => scrollToSection("servicos")}
           onBookNow={() => scrollToSection("servicos")}
+        />
+      )}
+
+      {/* 2.1 Seção de Destaques Estilizada da Black Friday (apenas quando ativa) */}
+      {isBFActive && blackFridayCampaign && (
+        <BlackFridayHighlightsSection
+          campaign={blackFridayCampaign}
+          onExploreServices={() => scrollToSection("black-friday-servicos")}
         />
       )}
 
@@ -433,6 +443,16 @@ export default function ClientHomePage() {
 
       {/* 5. Nossa História & Essência */}
       <AboutStorySection />
+
+      {/* 5.1 Vitrine Exclusiva Black Friday (Apenas Procedimentos Promocionais e Datas Exclusivas) */}
+      {isBFActive && blackFridayCampaign && (
+        <BlackFridayExclusiveShowcase
+          services={services}
+          campaign={blackFridayCampaign}
+          onSelectService={handleSelectService}
+          whatsappNumber={whatsappNumber}
+        />
+      )}
 
       {/* 6. Catálogo de Serviços com Valores e Etapas */}
       <TransparentServicesCatalog
