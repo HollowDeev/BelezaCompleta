@@ -269,7 +269,7 @@ export default function DashboardPage() {
   const refreshAll = async () => {
     setIsLoadingData(true);
     try {
-      const [org, profs, srvs, forms, subs, props, tpls, apts, clis, preRes, avDays] = await Promise.all([
+      const [org, profs, srvs, forms, subs, props, tpls, apts, preRes, avDays] = await Promise.all([
         SupabaseDataService.getOrganization(),
         SupabaseDataService.getProfiles(),
         SupabaseDataService.getServices(),
@@ -278,10 +278,11 @@ export default function DashboardPage() {
         SupabaseDataService.getProposals(),
         SupabaseDataService.getProposalTemplates(),
         SupabaseDataService.getAppointments(),
-        SupabaseDataService.getClients(),
         SupabaseDataService.getPreReservations("11111111-1111-4111-8111-111111111111"),
         SupabaseDataService.getAvailableDays("58f26242-1e53-432e-b924-dea25ee2068a"),
       ]);
+
+      const clis = await SupabaseDataService.getClients(apts, subs, preRes || []);
 
       setOrganization(org);
       setProfiles(profs);
@@ -322,7 +323,7 @@ export default function DashboardPage() {
     return unsubscribe;
   }, [authLoading, user, role]);
 
-  // Polling de segurança (30s) e re-sincronização imediata ao focar na janela/aba
+  // Polling de segurança inteligente (5 min) e re-sincronização imediata ao focar na janela/aba
   useEffect(() => {
     if (authLoading || !user || role === "client") return;
 
@@ -331,9 +332,12 @@ export default function DashboardPage() {
     };
     window.addEventListener("focus", handleFocus);
 
+    // Polling a cada 5 minutos e SOMENTE se a aba estiver visível (evita consumo desnecessário de egress quando a aba está em segundo plano)
     const intervalId = setInterval(() => {
-      refreshAll();
-    }, 30000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshAll();
+      }
+    }, 5 * 60 * 1000);
 
     return () => {
       window.removeEventListener("focus", handleFocus);

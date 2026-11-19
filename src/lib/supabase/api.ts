@@ -601,6 +601,16 @@ export class SupabaseDataService {
         if (org && isUuid(org.id)) orgId = org.id;
       } catch (e) {}
 
+      if (sub.photos && typeof sub.photos === "object") {
+        for (const [key, val] of Object.entries(sub.photos)) {
+          if (typeof val === "string" && val.startsWith("data:image/")) {
+            console.warn(
+              `[Supabase Egress Alert] Foto "${key}" salva como Base64 (${Math.round(val.length / 1024)} KB). Certifique-se de configurar as variáveis CLOUDFLARE_R2_* na Vercel para evitar consumo de egress no Supabase.`
+            );
+          }
+        }
+      }
+
       const payload: Record<string, unknown> = {
         org_id: orgId,
         form_id: resolveValidUuid(sub.formId, DEFAULT_TRIAGE_FORM_ID) || DEFAULT_TRIAGE_FORM_ID,
@@ -1389,7 +1399,11 @@ export class SupabaseDataService {
   }
 
   // 9. Gestão de Clientes & CRM
-  static async getClients(): Promise<SalonClient[]> {
+  static async getClients(
+    existingAppointments?: Appointment[],
+    existingTriages?: TriageSubmission[],
+    existingPreRes?: PreReservation[]
+  ): Promise<SalonClient[]> {
     let clients: SalonClient[] = [];
     if (!isSupabaseConfigured || !supabase) {
       clients = SalonStore.getClients();
@@ -1423,15 +1437,14 @@ export class SupabaseDataService {
     }
 
     // Harmoniza clientes que enviaram triagens, pré-reservas ou agendamentos
-    const [appointments, triages, preRes] = await Promise.all([
-      this.getAppointments().catch(() => []),
-      this.getTriageSubmissions().catch(() => []),
-      this.getPreReservations(DEFAULT_ORG_ID).catch(() => []),
-    ]);
+    // Reutiliza instâncias existentes caso já fornecidas pelo chamador para evitar chamadas redundantes ao banco
+    const appointments = existingAppointments || (await this.getAppointments().catch(() => []));
+    const triages = existingTriages || (await this.getTriageSubmissions().catch(() => []));
+    const preRes = existingPreRes || (await this.getPreReservations(DEFAULT_ORG_ID).catch(() => []));
 
     const knownPhones = new Set<string>(clients.map((c) => c.phone.replace(/\D/g, "")));
 
-    // Extrai clientes de pré-reservas que ainda não estavam na lista
+    // Extrai clientes de pré-reservas que ainda não estavam na lista (mantém em cache local sem disparar escritas contínuas no banco)
     for (const pr of preRes) {
       const clean = (pr.clientPhone || "").replace(/\D/g, "");
       if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
@@ -1446,11 +1459,11 @@ export class SupabaseDataService {
           lastServiceTitle: pr.serviceName,
         };
         clients.push(autoClient);
-        this.saveClient(autoClient).catch(() => {});
+        SalonStore.saveClient(autoClient);
       }
     }
 
-    // Extrai clientes de triagens que ainda não estavam na lista
+    // Extrai clientes de triagens que ainda não estavam na lista (mantém em cache local)
     for (const sub of triages) {
       const clean = (sub.clientPhone || "").replace(/\D/g, "");
       if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
@@ -1465,11 +1478,11 @@ export class SupabaseDataService {
           lastServiceTitle: sub.serviceTitle,
         };
         clients.push(autoClient);
-        this.saveClient(autoClient).catch(() => {});
+        SalonStore.saveClient(autoClient);
       }
     }
 
-    // Extrai clientes de agendamentos que ainda não estavam na lista
+    // Extrai clientes de agendamentos que ainda não estavam na lista (mantém em cache local)
     for (const apt of appointments) {
       const clean = (apt.clientPhone || "").replace(/\D/g, "");
       if (clean && clean.length >= 8 && !knownPhones.has(clean)) {
@@ -1485,7 +1498,7 @@ export class SupabaseDataService {
           lastVisitAt: apt.date ? `${apt.date}T10:00:00Z` : undefined,
         };
         clients.push(autoClient);
-        this.saveClient(autoClient).catch(() => {});
+        SalonStore.saveClient(autoClient);
       }
     }
 

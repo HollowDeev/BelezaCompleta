@@ -14,7 +14,7 @@ describe("EvolutionWhatsAppService", () => {
   });
 
   it("handles disconnectInstance cleanly", async () => {
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ status: "SUCCESS" }),
     } as any);
@@ -22,6 +22,7 @@ describe("EvolutionWhatsAppService", () => {
     const res = await EvolutionWhatsAppService.disconnectInstance();
     expect(res.success).toBe(true);
     expect(fetchSpy).toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });
 
