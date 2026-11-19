@@ -4,7 +4,11 @@ const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID || "";
 const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || "";
 const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || "";
 export const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || "glaicy-agenda-storage";
-export const publicDomain = (process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || "").replace(/\/$/, "");
+export const publicDomain = (
+  process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL ||
+  process.env.CLOUDFLARE_R2_PUBLIC_URL ||
+  ""
+).replace(/\/$/, "");
 
 export const isR2Configured = Boolean(
   accountId &&
